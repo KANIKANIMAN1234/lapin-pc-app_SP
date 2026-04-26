@@ -429,7 +429,7 @@ export default function ProjectDetailPage() {
               <h3><span className="material-icons text-green-600" style={{ fontSize: 18 }}>construction</span> 工事情報</h3>
               <InfoRow label="工事種別">
                 <div className="flex gap-1.5 flex-wrap">
-                  {(project.work_type ?? []).map((w) => (
+                  {(project.work_type ?? []).map((w: string) => (
                     <span key={w} className="px-2 py-0.5 bg-green-50 text-green-700 text-xs font-medium rounded">{w}</span>
                   ))}
                 </div>
