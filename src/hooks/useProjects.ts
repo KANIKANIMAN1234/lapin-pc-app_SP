@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase';
 import type { Project } from '@/types';
-import type { TablesInsert, TablesUpdate } from '@/types/supabase';
 
 type ProjectFilters = {
   status?: string[];
@@ -92,7 +91,7 @@ export function useProject(id: string) {
 export function useCreateProject() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (project: TablesInsert<'t_projects'>) => {
+    mutationFn: async (project: Omit<Project, 'id' | 'project_number' | 'created_at' | 'updated_at'>) => {
       const supabase = createClient();
       const { data, error } = await supabase
         .from('t_projects')
@@ -114,7 +113,7 @@ export function useCreateProject() {
 export function useUpdateProject() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...updates }: TablesUpdate<'t_projects'> & { id: string }) => {
+    mutationFn: async ({ id, ...updates }: Partial<Project> & { id: string }) => {
       const supabase = createClient();
       const { data, error } = await supabase
         .from('t_projects')
