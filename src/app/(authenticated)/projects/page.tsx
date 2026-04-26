@@ -1,0 +1,219 @@
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { useProjects } from '@/hooks/useProjects';
+import { useAuthStore } from '@/stores/authStore';
+import type { Project, ProjectStatus } from '@/types';
+
+const STATUS_LABELS: Record<ProjectStatus, string> = {
+  inquiry: '問い合わせ',
+  estimate: '見積もり',
+  followup_status: '追客中',
+  contract: '契約',
+  in_progress: '施工中',
+  completed: '完成',
+  lost: '失注',
+};
+
+const STATUS_CSS: Record<ProjectStatus, string> = {
+  inquiry: 'status-inquiry',
+  estimate: 'status-estimate',
+  followup_status: 'status-followup_status',
+  contract: 'status-contract',
+  in_progress: 'status-in_progress',
+  completed: 'status-completed',
+  lost: 'status-lost',
+};
+
+const ALL_STATUSES: ProjectStatus[] = ['inquiry', 'estimate', 'followup_status', 'contract', 'in_progress', 'completed', 'lost'];
+
+function formatYen(v: number | undefined) {
+  if (v == null) return '-';
+  if (v >= 10000) return `${Math.floor(v / 10000).toLocaleString()}万円`;
+  return `${v.toLocaleString()}円`;
+}
+
+export default function ProjectsPage() {
+  const { user } = useAuthStore();
+  const [keyword, setKeyword] = useState('');
+  const [selectedStatuses, setSelectedStatuses] = useState<ProjectStatus[]>([]);
+  const [myOnly, setMyOnly] = useState(false);
+  const [sortKey, setSortKey] = useState<'inquiry_date' | 'contract_amount' | 'status'>('inquiry_date');
+  const [sortAsc, setSortAsc] = useState(false);
+
+  const { data: projects, isLoading } = useProjects({
+    status: selectedStatuses.length > 0 ? selectedStatuses : undefined,
+    keyword: keyword || undefined,
+    assigned_to: myOnly ? user?.id : undefined,
+  });
+
+  const toggleStatus = (s: ProjectStatus) => {
+    setSelectedStatuses((prev) =>
+      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
+    );
+  };
+
+  const sorted = [...(projects ?? [])].sort((a, b) => {
+    let cmp = 0;
+    if (sortKey === 'inquiry_date') cmp = a.inquiry_date.localeCompare(b.inquiry_date);
+    else if (sortKey === 'contract_amount') cmp = (a.contract_amount ?? 0) - (b.contract_amount ?? 0);
+    else if (sortKey === 'status') cmp = ALL_STATUSES.indexOf(a.status) - ALL_STATUSES.indexOf(b.status);
+    return sortAsc ? cmp : -cmp;
+  });
+
+  const handleSort = (key: typeof sortKey) => {
+    if (sortKey === key) setSortAsc(!sortAsc);
+    else { setSortKey(key); setSortAsc(false); }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold">案件一覧</h2>
+        <Link href="/projects/new" className="btn-primary">
+          <span className="material-icons" style={{ fontSize: 18 }}>add</span>
+          新規案件
+        </Link>
+      </div>
+
+      {/* 検索・フィルタ */}
+      <div className="search-panel">
+        <div className="search-row">
+          <div className="search-field" style={{ flexBasis: '300px' }}>
+            <label>キーワード</label>
+            <input
+              type="text"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              placeholder="顧客名・住所・案件番号"
+              className="form-input"
+            />
+          </div>
+          <div className="search-field">
+            <label>ステータス</label>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {ALL_STATUSES.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => toggleStatus(s)}
+                  className={`px-2 py-0.5 text-xs rounded-full border transition ${
+                    selectedStatuses.includes(s)
+                      ? 'bg-green-600 text-white border-green-600'
+                      : 'bg-white text-gray-600 border-gray-200'
+                  }`}
+                >
+                  {STATUS_LABELS[s]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="search-field" style={{ flexBasis: 'auto', flexGrow: 0 }}>
+            <label>絞り込み</label>
+            <label className="flex items-center gap-1.5 mt-1 cursor-pointer text-sm">
+              <input
+                type="checkbox"
+                checked={myOnly}
+                onChange={(e) => setMyOnly(e.target.checked)}
+                className="rounded"
+                style={{ accentColor: '#06C755' }}
+              />
+              自分の担当のみ
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {/* 件数 */}
+      <div className="text-sm text-gray-500 mb-3">
+        {isLoading ? '読み込み中...' : `${sorted.length}件`}
+      </div>
+
+      {/* テーブル */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        {isLoading ? (
+          <div className="flex items-center justify-center p-16">
+            <div className="spinner" /><p className="ml-3 text-gray-500">読み込み中...</p>
+          </div>
+        ) : sorted.length === 0 ? (
+          <div className="p-16 text-center text-gray-400">
+            <span className="material-icons text-5xl mb-2">folder_open</span>
+            <p>案件が見つかりません</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>案件番号</th>
+                  <th>顧客名</th>
+                  <th>住所</th>
+                  <th>工事種別</th>
+                  <th
+                    onClick={() => handleSort('status')}
+                    className="cursor-pointer select-none"
+                  >
+                    ステータス {sortKey === 'status' ? (sortAsc ? '↑' : '↓') : ''}
+                  </th>
+                  <th
+                    onClick={() => handleSort('contract_amount')}
+                    className="cursor-pointer select-none"
+                  >
+                    契約金額 {sortKey === 'contract_amount' ? (sortAsc ? '↑' : '↓') : ''}
+                  </th>
+                  <th
+                    onClick={() => handleSort('inquiry_date')}
+                    className="cursor-pointer select-none"
+                  >
+                    問い合わせ日 {sortKey === 'inquiry_date' ? (sortAsc ? '↑' : '↓') : ''}
+                  </th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((project: Project) => (
+                  <tr key={project.id}>
+                    <td className="font-mono text-xs">{project.project_number}</td>
+                    <td className="font-medium">{project.customer_name}</td>
+                    <td className="text-gray-500 text-xs">{project.address}</td>
+                    <td>
+                      <div className="flex flex-wrap gap-1">
+                        {project.work_type.slice(0, 2).map((wt) => (
+                          <span key={wt} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded">
+                            {wt}
+                          </span>
+                        ))}
+                        {project.work_type.length > 2 && (
+                          <span className="text-[10px] text-gray-400">+{project.work_type.length - 2}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`badge ${STATUS_CSS[project.status]}`}>
+                        {STATUS_LABELS[project.status]}
+                      </span>
+                    </td>
+                    <td className="text-right font-medium">
+                      {formatYen(project.contract_amount)}
+                    </td>
+                    <td className="text-gray-500 text-xs">
+                      {project.inquiry_date}
+                    </td>
+                    <td>
+                      <Link
+                        href={`/projects/${project.id}`}
+                        className="text-xs text-green-600 hover:underline whitespace-nowrap"
+                      >
+                        詳細 →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
