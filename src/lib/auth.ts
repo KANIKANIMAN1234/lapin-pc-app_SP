@@ -1,5 +1,6 @@
 const LINE_LOGIN_CHANNEL_ID = process.env.NEXT_PUBLIC_LINE_LOGIN_CHANNEL_ID || '';
 const LINE_LOGIN_CALLBACK_URL = process.env.NEXT_PUBLIC_LINE_LOGIN_CALLBACK_URL || '';
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 /**
  * LINE ログイン URL を生成する
@@ -45,7 +46,11 @@ export async function exchangeLineCodeForSupabaseSession(
   try {
     const res = await fetch(`${supabaseEdgeFunctionUrl}/auth-line`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
       body: JSON.stringify({
         code,
         redirect_uri: LINE_LOGIN_CALLBACK_URL,
