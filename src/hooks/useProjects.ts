@@ -69,10 +69,8 @@ export function useProject(id: string) {
         .from('t_projects')
         .select(`
           *,
-          t_photos(id, type, file_id, drive_url, thumbnail_url, file_name, uploaded_at, progress_status),
-          t_receipts(id, store_name, amount, status, purchase_date, item_category:items),
-          t_meetings(id, meeting_date, meeting_type, summary),
-          t_reports(id, report_date, content, progress_status:content, weather:audio_url)
+          t_photos(id, type, file_id, drive_url, thumbnail_url, file_name, uploaded_at),
+          t_meetings(id, meeting_date, meeting_type, summary)
         `)
         .eq('id', id)
         .is('deleted_at', null)
