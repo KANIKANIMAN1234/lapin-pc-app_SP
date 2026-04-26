@@ -14,7 +14,13 @@
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { corsHeaders } from '../_shared/cors.ts';
+
+// ダッシュボードエディタは単一ファイルのため corsHeaders をインライン定義
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
 
 Deno.serve(async (req: Request) => {
   // CORS プリフライト
