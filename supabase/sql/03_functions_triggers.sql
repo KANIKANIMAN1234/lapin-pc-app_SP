@@ -167,18 +167,24 @@ CREATE OR REPLACE FUNCTION handle_new_auth_user()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
   -- auth.users への INSERT 時に m_users へ同期（初回のみ）
-  INSERT INTO m_users (id, email, name, role, avatar_url, line_user_id)
+  INSERT INTO m_users (id, email, name, role, avatar_url, line_user_id, status)
   VALUES (
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data ->> 'name', '未設定'),
     COALESCE(NEW.raw_user_meta_data ->> 'role', 'sales'),
     NEW.raw_user_meta_data ->> 'avatar_url',
-    NEW.raw_user_meta_data ->> 'line_user_id'
+    NEW.raw_user_meta_data ->> 'line_user_id',
+    'active'
   )
-  ON CONFLICT (id) DO NOTHING;
+  ON CONFLICT DO NOTHING;  -- id・email・line_user_id 全ての重複を無視
 
   RETURN NEW;
+EXCEPTION
+  WHEN OTHERS THEN
+    -- トリガーのエラーで auth.users INSERT がロールバックされないように
+    RAISE WARNING 'handle_new_auth_user error: %', SQLERRM;
+    RETURN NEW;
 END;
 $$;
 
