@@ -1,17 +1,18 @@
 /**
  * Supabase Database 型定義
- * 本来は `supabase gen types typescript` で自動生成するが、
- * ここでは主要テーブルの型を手動で定義する。
- * 実装時は CLI で自動生成した型に置き換えること。
  *
- * $ npx supabase gen types typescript --project-id <PROJECT_ID> > src/types/supabase.ts
+ * 本番では以下のコマンドで自動生成した型に置き換えること:
+ *   npx supabase gen types typescript --project-id <PROJECT_ID> > src/types/supabase.ts
  *
- * 注意: Insert/Update に Omit<Row> の自己参照を使うと TypeScript が never に
- * 解決することがあるため、各フィールドを明示的に定義している。
+ * @supabase/supabase-js v2.46+ では GenericTable に Relationships が必須、
+ * GenericSchema に CompositeTypes が必須のため、それらを含めて定義する。
  */
+
+type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
 
 export type Database = {
   public: {
+    PostgrestVersion: "12";
     Tables: {
       users: {
         Row: {
@@ -27,7 +28,7 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
-          id: string;
+          id?: string;
           line_user_id: string;
           name: string;
           email?: string | null;
@@ -45,6 +46,7 @@ export type Database = {
           avatar_url?: string | null;
           status?: 'active' | 'retired';
         };
+        Relationships: [];
       };
       settings: {
         Row: {
@@ -71,6 +73,7 @@ export type Database = {
           n8n_webhook_url?: string | null;
           google_calendar_id?: string | null;
         };
+        Relationships: [];
       };
       projects: {
         Row: {
@@ -110,18 +113,19 @@ export type Database = {
           deleted_at: string | null;
         };
         Insert: {
+          id?: string;
           customer_name: string;
           customer_name_kana?: string | null;
           postal_code?: string | null;
           address: string;
           phone: string;
           email?: string | null;
-          work_description: string;
+          work_description?: string;
           work_type: string[];
-          status: 'inquiry' | 'estimate' | 'followup_status' | 'contract' | 'in_progress' | 'completed' | 'lost';
-          estimated_amount: number;
+          status?: 'inquiry' | 'estimate' | 'followup_status' | 'contract' | 'in_progress' | 'completed' | 'lost';
+          estimated_amount?: number;
           contract_amount?: number | null;
-          acquisition_route: string;
+          acquisition_route?: string;
           assigned_to: string;
           inquiry_date: string;
           contract_date?: string | null;
@@ -167,6 +171,7 @@ export type Database = {
           notes?: string | null;
           deleted_at?: string | null;
         };
+        Relationships: [];
       };
       photos: {
         Row: {
@@ -185,6 +190,7 @@ export type Database = {
           deleted_at: string | null;
         };
         Insert: {
+          id?: string;
           project_id: string;
           type: 'before' | 'inspection' | 'undercoat' | 'completed';
           file_id: string;
@@ -206,6 +212,7 @@ export type Database = {
           progress_status?: 'ahead' | 'on_schedule' | 'delayed' | null;
           deleted_at?: string | null;
         };
+        Relationships: [];
       };
       receipts: {
         Row: {
@@ -223,6 +230,7 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          id?: string;
           project_id: string;
           store_name?: string | null;
           amount: number;
@@ -242,6 +250,7 @@ export type Database = {
           photo_url?: string | null;
           status?: 'pending' | 'confirmed' | 'rejected';
         };
+        Relationships: [];
       };
       expenses: {
         Row: {
@@ -257,6 +266,7 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          id?: string;
           user_id: string;
           project_id?: string | null;
           amount: number;
@@ -274,6 +284,7 @@ export type Database = {
           memo?: string | null;
           receipt_url?: string | null;
         };
+        Relationships: [];
       };
       meetings: {
         Row: {
@@ -287,6 +298,7 @@ export type Database = {
           created_at: string;
         };
         Insert: {
+          id?: string;
           project_id: string;
           meeting_date: string;
           meeting_type: string;
@@ -300,6 +312,7 @@ export type Database = {
           summary?: string;
           audio_url?: string | null;
         };
+        Relationships: [];
       };
       reports: {
         Row: {
@@ -315,6 +328,7 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          id?: string;
           project_id: string;
           report_date: string;
           content: string;
@@ -330,6 +344,7 @@ export type Database = {
           weather?: string | null;
           progress_status?: 'ahead' | 'on_schedule' | 'delayed';
         };
+        Relationships: [];
       };
       bonus_periods: {
         Row: {
@@ -342,6 +357,7 @@ export type Database = {
           created_at: string;
         };
         Insert: {
+          id?: string;
           period_label: string;
           period_start: string;
           period_end: string;
@@ -355,10 +371,20 @@ export type Database = {
           fixed_cost?: number;
           distribution_rate?: number;
         };
+        Relationships: [];
       };
     };
-    Views: Record<string, never>;
-    Functions: Record<string, never>;
-    Enums: Record<string, never>;
+    Views: { [_ in never]: never };
+    Functions: { [_ in never]: never };
+    Enums: { [_ in never]: never };
+    CompositeTypes: { [_ in never]: never };
   };
 };
+
+// 便利な型エイリアス（auto-generated 型ファイルに準拠）
+export type Tables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row'];
+export type TablesInsert<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Insert'];
+export type TablesUpdate<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Update'];
+
+// suppress unused warning
+void (null as unknown as Json);

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import type { TablesInsert } from '@/types/supabase';
 
 const EXPENSE_CATEGORIES = ['交通費', '駐車場', '材料費', '外注費', '接待費', '消耗品費', 'その他'];
 
@@ -40,7 +41,7 @@ export default function ExpensePage() {
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2500); };
 
   const { mutateAsync: createExpense, isPending } = useMutation({
-    mutationFn: async (expense: { amount: number; expense_date: string; category: string; memo: string; user_id: string }) => {
+    mutationFn: async (expense: TablesInsert<'expenses'>) => {
       const supabase = createClient();
       const { error } = await supabase.from('expenses').insert(expense);
       if (error) throw error;
@@ -59,7 +60,7 @@ export default function ExpensePage() {
       amount: Number(form.amount),
       expense_date: form.date,
       category: form.category,
-      memo: form.memo,
+      memo: form.memo || null,
       user_id: user?.id ?? '',
     });
   };
