@@ -1,0 +1,282 @@
+/**
+ * auth-line Edge Function
+ *
+ * LINE OAuth認可コード → Supabase JWT セッション 交換
+ *
+ * フロー:
+ *   1. LINE認可コード(code) を受け取る
+ *   2. LINE Token API でアクセストークン + IDトークンを取得
+ *   3. LINE Verify API でIDトークンを検証（line_user_id取得）
+ *   4. m_users テーブルでユーザーを検索 or 新規作成
+ *   5. Supabase Auth にユーザーを作成 or 更新
+ *   6. magic link → token_hash → verifyOtp でセッション生成
+ *   7. access_token / refresh_token をフロントエンドに返す
+ */
+
+import { createClient } from 'npm:@supabase/supabase-js@2';
+import { corsHeaders } from '../_shared/cors.ts';
+
+Deno.serve(async (req: Request) => {
+  // CORS プリフライト
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  try {
+    // -------------------------------------------------------
+    // 環境変数（Supabase Edge Functions は自動注入）
+    // -------------------------------------------------------
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+    const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const LINE_CHANNEL_ID = Deno.env.get('LINE_CHANNEL_ID')!;
+    const LINE_CHANNEL_SECRET = Deno.env.get('LINE_CHANNEL_SECRET')!;
+
+    if (!LINE_CHANNEL_ID || !LINE_CHANNEL_SECRET) {
+      return errRes(500, 'CONFIG_ERROR', 'LINE_CHANNEL_ID または LINE_CHANNEL_SECRET が未設定です');
+    }
+
+    // -------------------------------------------------------
+    // リクエスト解析
+    // -------------------------------------------------------
+    const body = await req.json().catch(() => ({}));
+    const { code, redirect_uri } = body as { code?: string; redirect_uri?: string };
+
+    if (!code) {
+      return errRes(400, 'MISSING_CODE', 'code は必須パラメータです');
+    }
+
+    const redirectUri = redirect_uri ?? '';
+
+    // -------------------------------------------------------
+    // Step 1: LINE認可コード → アクセストークン + IDトークン
+    // -------------------------------------------------------
+    const tokenRes = await fetch('https://api.line.me/oauth2/v2.1/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+        client_id: LINE_CHANNEL_ID,
+        client_secret: LINE_CHANNEL_SECRET,
+      }),
+    });
+
+    const lineTokens = await tokenRes.json();
+    if (lineTokens.error) {
+      console.error('LINE token error:', lineTokens);
+      return errRes(401, 'LINE_TOKEN_ERROR', lineTokens.error_description ?? lineTokens.error);
+    }
+
+    const { id_token, access_token: lineAccessToken } = lineTokens as {
+      id_token: string;
+      access_token: string;
+    };
+
+    // -------------------------------------------------------
+    // Step 2: IDトークンを検証 → LINE UID / 名前 / メール取得
+    // -------------------------------------------------------
+    const verifyRes = await fetch('https://api.line.me/oauth2/v2.1/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        id_token,
+        client_id: LINE_CHANNEL_ID,
+      }),
+    });
+
+    const lineProfile = await verifyRes.json();
+    if (lineProfile.error) {
+      console.error('LINE verify error:', lineProfile);
+      return errRes(401, 'LINE_VERIFY_ERROR', 'LINEトークンの検証に失敗しました');
+    }
+
+    // LINEプロフィール詳細（アバター取得）
+    const profileRes = await fetch('https://api.line.me/v2/profile', {
+      headers: { Authorization: `Bearer ${lineAccessToken}` },
+    });
+    const detailedProfile = await profileRes.json().catch(() => ({}));
+
+    const lineUserId: string = lineProfile.sub;
+    const displayName: string = lineProfile.name ?? detailedProfile.displayName ?? '未設定';
+    const avatarUrl: string | null = lineProfile.picture ?? detailedProfile.pictureUrl ?? null;
+    const lineEmail: string | null = lineProfile.email ?? null;
+    // LINEのメールアドレスが取得できない場合は line_user_id から生成
+    const userEmail = lineEmail ?? `${lineUserId}@line.user`;
+
+    // -------------------------------------------------------
+    // Step 3: Supabase クライアント初期化
+    // -------------------------------------------------------
+    const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const supabaseAnon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    // -------------------------------------------------------
+    // Step 4: m_users からユーザーを検索 or 新規作成
+    // -------------------------------------------------------
+    const { data: existingDbUser } = await supabaseAdmin
+      .from('m_users')
+      .select('id, email, name, role, status, line_user_id, avatar_url')
+      .eq('line_user_id', lineUserId)
+      .single();
+
+    let authUserId: string;
+    let dbUser = existingDbUser;
+
+    if (!dbUser) {
+      // ── 新規ユーザー ──────────────────────────────────────
+
+      // auth.users に作成（既に存在する場合は取得）
+      const { data: newAuthData, error: createError } = await supabaseAdmin.auth.admin.createUser({
+        email: userEmail,
+        user_metadata: {
+          name: displayName,
+          role: 'sales',
+          line_user_id: lineUserId,
+          avatar_url: avatarUrl,
+        },
+        email_confirm: true,
+      });
+
+      if (createError) {
+        // 既存ユーザーの場合はメールで検索
+        const { data: listData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+        const found = listData?.users?.find((u) => u.email === userEmail);
+        if (!found) {
+          console.error('auth.users create error:', createError);
+          return errRes(500, 'AUTH_CREATE_ERROR', createError.message);
+        }
+        authUserId = found.id;
+      } else {
+        authUserId = newAuthData.user!.id;
+      }
+
+      // m_users に UPSERT（auth trigger の保険）
+      const { data: upsertedUser, error: upsertError } = await supabaseAdmin
+        .from('m_users')
+        .upsert(
+          {
+            id: authUserId,
+            line_user_id: lineUserId,
+            email: lineEmail,
+            name: displayName,
+            role: 'sales',
+            avatar_url: avatarUrl,
+            status: 'active',
+          },
+          { onConflict: 'id' }
+        )
+        .select('id, email, name, role, status, line_user_id, avatar_url')
+        .single();
+
+      if (upsertError) {
+        console.error('m_users upsert error:', upsertError);
+        return errRes(500, 'USER_UPSERT_ERROR', upsertError.message);
+      }
+
+      dbUser = upsertedUser;
+    } else {
+      // ── 既存ユーザー ──────────────────────────────────────
+      authUserId = dbUser.id;
+
+      // status チェック（退職者はログイン拒否）
+      if (dbUser.status === 'retired') {
+        return errRes(403, 'USER_RETIRED', 'このアカウントは無効化されています。管理者にお問い合わせください。');
+      }
+
+      // auth.users のメタデータを最新化
+      await supabaseAdmin.auth.admin.updateUserById(authUserId, {
+        user_metadata: {
+          name: dbUser.name,
+          role: dbUser.role,
+          line_user_id: lineUserId,
+          avatar_url: avatarUrl,
+        },
+      });
+
+      // avatar_url 更新（LINEプロフィール画像が変わった場合）
+      if (avatarUrl && avatarUrl !== dbUser.avatar_url) {
+        await supabaseAdmin
+          .from('m_users')
+          .update({ avatar_url: avatarUrl })
+          .eq('id', authUserId);
+      }
+    }
+
+    if (!dbUser) {
+      return errRes(500, 'USER_NOT_FOUND', 'ユーザーの作成・取得に失敗しました');
+    }
+
+    // -------------------------------------------------------
+    // Step 5: Supabase セッション生成
+    //   magic link → hashed_token → verifyOtp → session
+    // -------------------------------------------------------
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'magiclink',
+      email: userEmail,
+      options: {
+        data: {
+          name: dbUser.name,
+          role: dbUser.role,
+          line_user_id: lineUserId,
+          avatar_url: avatarUrl,
+        },
+      },
+    });
+
+    if (linkError || !linkData?.properties?.hashed_token) {
+      console.error('generateLink error:', linkError);
+      return errRes(500, 'TOKEN_GENERATE_ERROR', linkError?.message ?? 'トークン生成に失敗しました');
+    }
+
+    const { data: sessionData, error: sessionError } = await supabaseAnon.auth.verifyOtp({
+      token_hash: linkData.properties.hashed_token,
+      type: 'email',
+    });
+
+    if (sessionError || !sessionData?.session) {
+      console.error('verifyOtp error:', sessionError);
+      return errRes(500, 'SESSION_ERROR', sessionError?.message ?? 'セッション生成に失敗しました');
+    }
+
+    // -------------------------------------------------------
+    // Step 6: レスポンス返却
+    // -------------------------------------------------------
+    return new Response(
+      JSON.stringify({
+        access_token: sessionData.session.access_token,
+        refresh_token: sessionData.session.refresh_token,
+        expires_in: sessionData.session.expires_in,
+        user: {
+          id: dbUser.id,
+          email: dbUser.email ?? userEmail,
+          name: dbUser.name,
+          role: dbUser.role,
+          line_user_id: dbUser.line_user_id,
+          avatar_url: avatarUrl,
+        },
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
+  } catch (err) {
+    console.error('auth-line unexpected error:', err);
+    return errRes(500, 'INTERNAL_ERROR', String(err));
+  }
+});
+
+// -------------------------------------------------------
+// ヘルパー: エラーレスポンス生成
+// -------------------------------------------------------
+function errRes(status: number, code: string, message: string): Response {
+  return new Response(JSON.stringify({ error: code, message }), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
