@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase';
 import type { Project } from '@/types';
+import type { TablesInsert, TablesUpdate } from '@/types/supabase';
 
 type ProjectFilters = {
   status?: string[];
@@ -19,7 +20,7 @@ export function useProjects(filters?: ProjectFilters) {
     queryFn: async () => {
       const supabase = createClient();
       let query = supabase
-        .from('projects')
+        .from('t_projects')
         .select(`
           id, project_number, customer_name, customer_name_kana,
           address, phone, work_description, work_type,
@@ -66,13 +67,13 @@ export function useProject(id: string) {
     queryFn: async () => {
       const supabase = createClient();
       const { data, error } = await supabase
-        .from('projects')
+        .from('t_projects')
         .select(`
           *,
-          photos(id, type, file_id, drive_url, thumbnail_url, file_name, uploaded_at, progress_status),
-          receipts(id, store_name, amount, status, purchased_at, category),
-          meetings(id, meeting_date, meeting_type, summary),
-          reports(id, report_date, content, progress_status, weather)
+          t_photos(id, type, file_id, drive_url, thumbnail_url, file_name, uploaded_at, progress_status),
+          t_receipts(id, store_name, amount, status, purchase_date, item_category:items),
+          t_meetings(id, meeting_date, meeting_type, summary),
+          t_reports(id, report_date, content, progress_status:content, weather:audio_url)
         `)
         .eq('id', id)
         .is('deleted_at', null)
@@ -91,26 +92,11 @@ export function useProject(id: string) {
 export function useCreateProject() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (project: Omit<Project, 'id' | 'project_number' | 'created_at' | 'updated_at'>) => {
+    mutationFn: async (project: TablesInsert<'t_projects'>) => {
       const supabase = createClient();
       const { data, error } = await supabase
-        .from('projects')
-        .insert({
-          customer_name: project.customer_name,
-          customer_name_kana: project.customer_name_kana,
-          postal_code: project.postal_code,
-          address: project.address,
-          phone: project.phone,
-          email: project.email,
-          work_description: project.work_description,
-          work_type: project.work_type,
-          status: project.status,
-          estimated_amount: project.estimated_amount,
-          acquisition_route: project.acquisition_route,
-          assigned_to: project.assigned_to,
-          inquiry_date: project.inquiry_date,
-          notes: project.notes,
-        })
+        .from('t_projects')
+        .insert(project)
         .select()
         .single();
       if (error) throw error;
@@ -128,10 +114,10 @@ export function useCreateProject() {
 export function useUpdateProject() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...updates }: Partial<Project> & { id: string }) => {
+    mutationFn: async ({ id, ...updates }: TablesUpdate<'t_projects'> & { id: string }) => {
       const supabase = createClient();
       const { data, error } = await supabase
-        .from('projects')
+        .from('t_projects')
         .update(updates)
         .eq('id', id)
         .select()
@@ -155,7 +141,7 @@ export function useDeleteProject() {
     mutationFn: async (id: string) => {
       const supabase = createClient();
       const { error } = await supabase
-        .from('projects')
+        .from('t_projects')
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', id);
       if (error) throw error;

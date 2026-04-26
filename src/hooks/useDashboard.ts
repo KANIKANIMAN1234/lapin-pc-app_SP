@@ -26,7 +26,7 @@ export function useDashboard(startDate: string, endDate: string, userId?: string
 
       // 期間内のアクセス可能な案件を取得（RLSで自動フィルタ）
       let projectsQuery = supabase
-        .from('projects')
+        .from('t_projects')
         .select('id, status, estimated_amount, contract_amount, gross_profit, gross_profit_rate, acquisition_route, work_type, inquiry_date, contract_date, assigned_to')
         .is('deleted_at', null)
         .gte('inquiry_date', startDate)
@@ -101,7 +101,7 @@ export function useDashboard(startDate: string, endDate: string, userId?: string
       if (userId) {
         const now = new Date();
         const { data: bonusPeriods } = await supabase
-          .from('bonus_periods')
+          .from('m_bonus_periods')
           .select('*')
           .lte('period_start', now.toISOString().substring(0, 10))
           .gte('period_end', now.toISOString().substring(0, 10))
@@ -110,7 +110,7 @@ export function useDashboard(startDate: string, endDate: string, userId?: string
 
         if (bonusPeriods) {
           const { data: bonusProjects } = await supabase
-            .from('projects')
+            .from('t_projects')
             .select('gross_profit')
             .eq('assigned_to', userId)
             .gte('contract_date', bonusPeriods.period_start)
@@ -132,7 +132,7 @@ export function useDashboard(startDate: string, endDate: string, userId?: string
             gross_profit: totalGrossProfit,
             surplus,
             bonus_estimate,
-            target_amount: bonusPeriods.fixed_cost * 2,
+            target_amount: bonusPeriods.target_amount,
             achievement_rate,
             distribution_rate: bonusPeriods.distribution_rate,
           };
@@ -143,7 +143,7 @@ export function useDashboard(startDate: string, endDate: string, userId?: string
       let user_name = '';
       if (userId) {
         const { data: userData } = await supabase
-          .from('users')
+          .from('m_users')
           .select('name')
           .eq('id', userId)
           .single();

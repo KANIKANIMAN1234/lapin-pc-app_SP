@@ -19,7 +19,7 @@ function useExpenses() {
     queryFn: async () => {
       const supabase = createClient();
       const { data, error } = await supabase
-        .from('expenses')
+        .from('t_expenses')
         .select('*')
         .eq('user_id', user?.id ?? '')
         .order('expense_date', { ascending: false })
@@ -41,9 +41,9 @@ export default function ExpensePage() {
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2500); };
 
   const { mutateAsync: createExpense, isPending } = useMutation({
-    mutationFn: async (expense: TablesInsert<'expenses'>) => {
+    mutationFn: async (expense: TablesInsert<'t_expenses'>) => {
       const supabase = createClient();
-      const { error } = await supabase.from('expenses').insert(expense);
+      const { error } = await supabase.from('t_expenses').insert(expense);
       if (error) throw error;
     },
     onSuccess: () => {

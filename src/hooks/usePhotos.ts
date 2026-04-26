@@ -4,7 +4,7 @@ import type { Photo } from '@/types';
 
 /**
  * 案件の写真一覧を取得する
- * - Google Drive URL は Supabase photos テーブルに保存されたものを使用
+ * - Google Drive URL は Supabase t_photos テーブルに保存されたものを使用
  */
 export function usePhotos(projectId: string) {
   return useQuery({
@@ -12,7 +12,7 @@ export function usePhotos(projectId: string) {
     queryFn: async () => {
       const supabase = createClient();
       const { data, error } = await supabase
-        .from('photos')
+        .from('t_photos')
         .select('id, type, file_id, drive_url, thumbnail_url, file_name, uploaded_at, progress_status')
         .eq('project_id', projectId)
         .is('deleted_at', null)
@@ -27,7 +27,7 @@ export function usePhotos(projectId: string) {
 
 /**
  * 写真をアップロードする
- * Edge Function を経由して Google Drive に保存 → photos テーブルに URL を記録
+ * Edge Function を経由して Google Drive に保存 → t_photos テーブルに URL を記録
  */
 export function useUploadPhoto() {
   const queryClient = useQueryClient();
@@ -47,7 +47,7 @@ export function useUploadPhoto() {
       const supabase = createClient();
 
       // Edge Function `photos` を呼び出し
-      // → Drive アップロード + 共有権限設定 + photos INSERT を一括処理
+      // → Drive アップロード + 共有権限設定 + t_photos INSERT を一括処理
       const { data, error } = await supabase.functions.invoke('photos', {
         body: {
           project_id: projectId,
@@ -77,7 +77,7 @@ export function useDeletePhoto() {
     mutationFn: async ({ photoId, projectId }: { photoId: string; projectId: string }) => {
       const supabase = createClient();
       const { error } = await supabase
-        .from('photos')
+        .from('t_photos')
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', photoId);
       if (error) throw error;

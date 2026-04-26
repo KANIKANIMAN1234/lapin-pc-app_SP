@@ -27,9 +27,9 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
         const role = authUser.user_metadata?.role as UserRole | undefined;
         const name = authUser.user_metadata?.name as string | undefined;
 
-        // users テーブルから詳細を取得
+        // m_users テーブルから詳細を取得
         const { data: userData } = await supabase
-          .from('users')
+          .from('m_users')
           .select('id, name, role, email, phone, avatar_url, status, line_user_id')
           .eq('id', authUser.id)
           .single();
