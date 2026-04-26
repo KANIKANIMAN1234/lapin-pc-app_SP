@@ -1,21 +1,20 @@
 /**
  * auth-line Edge Function
  *
- * LINE OAuth認可コード → Supabase JWT セッション 交換
+ * 2つのモードをサポート:
+ *  [A] LIFF モード  : フロントから { id_token } を受け取り直接検証
+ *  [B] OAuth コードモード: { code, redirect_uri } でトークン交換 (PC版)
  *
- * フロー:
- *   1. LINE認可コード(code) を受け取る
- *   2. LINE Token API でアクセストークン + IDトークンを取得
- *   3. LINE Verify API でIDトークンを検証（line_user_id取得）
- *   4. m_users テーブルでユーザーを検索 or 新規作成
- *   5. Supabase Auth にユーザーを作成 or 更新
- *   6. magic link → token_hash → verifyOtp でセッション生成
- *   7. access_token / refresh_token をフロントエンドに返す
+ * 共通フロー:
+ *  1. LINE APIでユーザー情報を取得
+ *  2. m_users テーブルでユーザーを検索 or 新規作成
+ *  3. Supabase Auth にユーザーを作成 or 更新
+ *  4. magic link → token_hash → verifyOtp でセッション生成
+ *  5. access_token / refresh_token をフロントエンドに返す
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-// ダッシュボードエディタは単一ファイルのため corsHeaders をインライン定義
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -23,15 +22,12 @@ const corsHeaders = {
 };
 
 Deno.serve(async (req: Request) => {
-  // CORS プリフライト
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    // -------------------------------------------------------
-    // 環境変数（Supabase Edge Functions は自動注入）
-    // -------------------------------------------------------
+    // ── 環境変数 ─────────────────────────────────────────────
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
     const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
     const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -42,78 +38,103 @@ Deno.serve(async (req: Request) => {
       return errRes(500, 'CONFIG_ERROR', 'LINE_CHANNEL_ID または LINE_CHANNEL_SECRET が未設定です');
     }
 
-    // -------------------------------------------------------
-    // リクエスト解析
-    // -------------------------------------------------------
+    // ── リクエスト解析 ────────────────────────────────────────
     const body = await req.json().catch(() => ({}));
-    const { code, redirect_uri } = body as { code?: string; redirect_uri?: string };
+    const {
+      code,
+      redirect_uri,
+      id_token: liffIdToken,
+    } = body as { code?: string; redirect_uri?: string; id_token?: string };
 
-    if (!code) {
-      return errRes(400, 'MISSING_CODE', 'code は必須パラメータです');
+    // ── LINE ユーザー情報の取得 ───────────────────────────────
+    let lineUserId: string;
+    let displayName: string;
+    let avatarUrl: string | null;
+    let lineEmail: string | null;
+    let lineAccessToken: string | null = null;
+
+    if (liffIdToken) {
+      // ────────────────────────────────────────────────────────
+      // [A] LIFF モード: フロントから id_token を受け取り直接検証
+      // ────────────────────────────────────────────────────────
+      const verifyRes = await fetch('https://api.line.me/oauth2/v2.1/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          id_token: liffIdToken,
+          client_id: LINE_CHANNEL_ID,
+        }),
+      });
+
+      const lineProfile = await verifyRes.json();
+      if (lineProfile.error) {
+        console.error('LIFF id_token verify error:', lineProfile);
+        return errRes(401, 'LINE_VERIFY_ERROR', 'LIFFトークンの検証に失敗しました: ' + (lineProfile.error_description ?? lineProfile.error));
+      }
+
+      lineUserId = lineProfile.sub;
+      displayName = lineProfile.name ?? '未設定';
+      avatarUrl = lineProfile.picture ?? null;
+      lineEmail = lineProfile.email ?? null;
+
+    } else if (code) {
+      // ────────────────────────────────────────────────────────
+      // [B] OAuth コードモード (PC版・既存の処理)
+      // ────────────────────────────────────────────────────────
+      const redirectUri = redirect_uri ?? '';
+
+      const tokenRes = await fetch('https://api.line.me/oauth2/v2.1/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: redirectUri,
+          client_id: LINE_CHANNEL_ID,
+          client_secret: LINE_CHANNEL_SECRET,
+        }),
+      });
+
+      const lineTokens = await tokenRes.json();
+      if (lineTokens.error) {
+        console.error('LINE token error:', lineTokens);
+        return errRes(401, 'LINE_TOKEN_ERROR', lineTokens.error_description ?? lineTokens.error);
+      }
+
+      const { id_token, access_token } = lineTokens as { id_token: string; access_token: string };
+      lineAccessToken = access_token;
+
+      const verifyRes = await fetch('https://api.line.me/oauth2/v2.1/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ id_token, client_id: LINE_CHANNEL_ID }),
+      });
+
+      const lineProfile = await verifyRes.json();
+      if (lineProfile.error) {
+        console.error('LINE verify error:', lineProfile);
+        return errRes(401, 'LINE_VERIFY_ERROR', 'LINEトークンの検証に失敗しました');
+      }
+
+      // アバター取得（access_token がある場合）
+      const profileRes = await fetch('https://api.line.me/v2/profile', {
+        headers: { Authorization: `Bearer ${lineAccessToken}` },
+      });
+      const detailedProfile = await profileRes.json().catch(() => ({}));
+
+      lineUserId = lineProfile.sub;
+      displayName = lineProfile.name ?? detailedProfile.displayName ?? '未設定';
+      avatarUrl = lineProfile.picture ?? detailedProfile.pictureUrl ?? null;
+      lineEmail = lineProfile.email ?? null;
+
+    } else {
+      return errRes(400, 'MISSING_PARAMS', 'id_token または code が必要です');
     }
 
-    const redirectUri = redirect_uri ?? '';
-
-    // -------------------------------------------------------
-    // Step 1: LINE認可コード → アクセストークン + IDトークン
-    // -------------------------------------------------------
-    const tokenRes = await fetch('https://api.line.me/oauth2/v2.1/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: redirectUri,
-        client_id: LINE_CHANNEL_ID,
-        client_secret: LINE_CHANNEL_SECRET,
-      }),
-    });
-
-    const lineTokens = await tokenRes.json();
-    if (lineTokens.error) {
-      console.error('LINE token error:', lineTokens);
-      return errRes(401, 'LINE_TOKEN_ERROR', lineTokens.error_description ?? lineTokens.error);
-    }
-
-    const { id_token, access_token: lineAccessToken } = lineTokens as {
-      id_token: string;
-      access_token: string;
-    };
-
-    // -------------------------------------------------------
-    // Step 2: IDトークンを検証 → LINE UID / 名前 / メール取得
-    // -------------------------------------------------------
-    const verifyRes = await fetch('https://api.line.me/oauth2/v2.1/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        id_token,
-        client_id: LINE_CHANNEL_ID,
-      }),
-    });
-
-    const lineProfile = await verifyRes.json();
-    if (lineProfile.error) {
-      console.error('LINE verify error:', lineProfile);
-      return errRes(401, 'LINE_VERIFY_ERROR', 'LINEトークンの検証に失敗しました');
-    }
-
-    // LINEプロフィール詳細（アバター取得）
-    const profileRes = await fetch('https://api.line.me/v2/profile', {
-      headers: { Authorization: `Bearer ${lineAccessToken}` },
-    });
-    const detailedProfile = await profileRes.json().catch(() => ({}));
-
-    const lineUserId: string = lineProfile.sub;
-    const displayName: string = lineProfile.name ?? detailedProfile.displayName ?? '未設定';
-    const avatarUrl: string | null = lineProfile.picture ?? detailedProfile.pictureUrl ?? null;
-    const lineEmail: string | null = lineProfile.email ?? null;
-    // LINEのメールアドレスが取得できない場合は line_user_id から生成
+    // メールアドレスが取得できない場合は line_user_id から生成
     const userEmail = lineEmail ?? `${lineUserId}@line.user`;
 
-    // -------------------------------------------------------
-    // Step 3: Supabase クライアント初期化
-    // -------------------------------------------------------
+    // ── Supabase クライアント初期化 ───────────────────────────
     const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
@@ -121,9 +142,7 @@ Deno.serve(async (req: Request) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // -------------------------------------------------------
-    // Step 4: m_users からユーザーを検索 or 新規作成
-    // -------------------------------------------------------
+    // ── m_users からユーザーを検索 or 新規作成 ────────────────
     const { data: existingDbUser } = await supabaseAdmin
       .from('m_users')
       .select('id, email, name, role, status, line_user_id, avatar_url')
@@ -135,8 +154,6 @@ Deno.serve(async (req: Request) => {
 
     if (!dbUser) {
       // ── 新規ユーザー ──────────────────────────────────────
-
-      // auth.users に作成（既に存在する場合は取得）
       const { data: newAuthData, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email: userEmail,
         user_metadata: {
@@ -149,7 +166,6 @@ Deno.serve(async (req: Request) => {
       });
 
       if (createError) {
-        // 既存ユーザーの場合はメールで検索
         const { data: listData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
         const found = listData?.users?.find((u) => u.email === userEmail);
         if (!found) {
@@ -161,7 +177,6 @@ Deno.serve(async (req: Request) => {
         authUserId = newAuthData.user!.id;
       }
 
-      // m_users に UPSERT（auth trigger の保険）
       const { data: upsertedUser, error: upsertError } = await supabaseAdmin
         .from('m_users')
         .upsert(
@@ -189,12 +204,10 @@ Deno.serve(async (req: Request) => {
       // ── 既存ユーザー ──────────────────────────────────────
       authUserId = dbUser.id;
 
-      // status チェック（退職者はログイン拒否）
       if (dbUser.status === 'retired') {
         return errRes(403, 'USER_RETIRED', 'このアカウントは無効化されています。管理者にお問い合わせください。');
       }
 
-      // auth.users のメタデータを最新化
       await supabaseAdmin.auth.admin.updateUserById(authUserId, {
         user_metadata: {
           name: dbUser.name,
@@ -204,7 +217,6 @@ Deno.serve(async (req: Request) => {
         },
       });
 
-      // avatar_url 更新（LINEプロフィール画像が変わった場合）
       if (avatarUrl && avatarUrl !== dbUser.avatar_url) {
         await supabaseAdmin
           .from('m_users')
@@ -217,10 +229,7 @@ Deno.serve(async (req: Request) => {
       return errRes(500, 'USER_NOT_FOUND', 'ユーザーの作成・取得に失敗しました');
     }
 
-    // -------------------------------------------------------
-    // Step 5: Supabase セッション生成
-    //   magic link → hashed_token → verifyOtp → session
-    // -------------------------------------------------------
+    // ── Supabase セッション生成 ────────────────────────────────
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
       email: userEmail,
@@ -249,9 +258,7 @@ Deno.serve(async (req: Request) => {
       return errRes(500, 'SESSION_ERROR', sessionError?.message ?? 'セッション生成に失敗しました');
     }
 
-    // -------------------------------------------------------
-    // Step 6: レスポンス返却
-    // -------------------------------------------------------
+    // ── レスポンス ────────────────────────────────────────────
     return new Response(
       JSON.stringify({
         access_token: sessionData.session.access_token,
@@ -264,6 +271,7 @@ Deno.serve(async (req: Request) => {
           role: dbUser.role,
           line_user_id: dbUser.line_user_id,
           avatar_url: avatarUrl,
+          status: dbUser.status,
         },
       }),
       {
@@ -277,9 +285,6 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-// -------------------------------------------------------
-// ヘルパー: エラーレスポンス生成
-// -------------------------------------------------------
 function errRes(status: number, code: string, message: string): Response {
   return new Response(JSON.stringify({ error: code, message }), {
     status,
