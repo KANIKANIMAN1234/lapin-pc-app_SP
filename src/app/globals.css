@@ -579,3 +579,52 @@ td.emp-actions { display: flex; gap: 0.5rem; align-items: center; white-space: n
   .header-user-name { display: none; }
   .header-attendance-group { display: none; }
 }
+
+/* ========================================
+   Map（顧客マップ）
+   ======================================== */
+.map-container {
+  display: flex; height: calc(100vh - 180px); gap: 0;
+  border-radius: 12px; overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.map-view { flex: 1; min-height: 400px; }
+.customer-info-panel {
+  width: 300px; background: white; padding: 1.25rem;
+  overflow-y: auto; border-left: 1px solid #e5e7eb;
+}
+.leaflet-div-icon.custom-marker { background: none !important; border: none !important; }
+
+.btn-area-setting {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 6px 14px; font-size: 0.78rem; font-weight: 500;
+  background: white; border: 1px solid #d1d5db; border-radius: 6px;
+  color: #374151; cursor: pointer; transition: all 0.2s; white-space: nowrap;
+}
+.btn-area-setting:hover { background: #f3f4f6; border-color: #9ca3af; }
+
+.map-area-info { margin-bottom: 4px; }
+.map-area-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 0.72rem; font-weight: 600; color: #06C755;
+  background: #e6f9ee; padding: 2px 8px; border-radius: 4px;
+}
+.map-area-badge .material-icons { font-size: 14px; }
+.map-area-address { font-size: 0.82rem; font-weight: 600; color: #1f2937; margin-top: 4px; }
+.map-area-source { font-size: 0.68rem; color: #9ca3af; }
+
+.map-area-option-group { display: flex; flex-direction: column; gap: 8px; }
+.map-area-option {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; cursor: pointer; transition: all 0.2s;
+}
+.map-area-option:hover { border-color: #9ca3af; }
+.map-area-option.selected { border-color: #06C755; background: #e6f9ee; }
+.map-area-option input[type="radio"] { margin-top: 3px; accent-color: #06C755; }
+.map-area-option-body { flex: 1; }
+.map-area-option-header { display: flex; align-items: center; gap: 6px; font-size: 0.9rem; }
+.map-area-option-header .material-icons { font-size: 18px; }
+.map-area-option-desc { font-size: 0.78rem; color: #6b7280; margin-top: 2px; }
+.map-area-custom-input {
+  margin-top: 12px; padding: 14px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;
+}
