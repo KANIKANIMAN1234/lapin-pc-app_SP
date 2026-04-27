@@ -10,11 +10,14 @@ import { createClient } from '@/lib/supabase';
 
 const MapContent = dynamic(() => import('@/components/features/map/MapContent'), { ssr: false });
 
-const STATUS_LABELS: Record<string, string> = {
-  completed: '完工',
-  in_progress: '施工中',
-  estimate: '見積中',
-  contract: '契約済',
+const DEFAULT_STATUS_LABELS: Record<string, string> = {
+  inquiry:        '問い合わせ',
+  estimate:       '見積もり',
+  followup_status:'追客中',
+  contract:       '契約',
+  in_progress:    '施工中',
+  completed:      '完成',
+  lost:           '失注',
 };
 
 const DEFAULT_CENTER: [number, number] = [35.853, 139.412];
@@ -72,6 +75,30 @@ function MapPageInner() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<MapCustomer | null>(null);
+
+  // m_settings からステータスラベルを動的取得
+  const [statusLabels, setStatusLabels] = useState<Record<string, string>>(DEFAULT_STATUS_LABELS);
+  useEffect(() => {
+    const supabase = createClient();
+    supabase
+      .from('m_settings')
+      .select('value')
+      .eq('key', 'project_status_options')
+      .single()
+      .then(({ data }) => {
+        if (!data?.value) return;
+        try {
+          const parsed: string[] = JSON.parse(data.value);
+          if (!Array.isArray(parsed) || parsed.length === 0) return;
+          const map: Record<string, string> = {};
+          parsed.forEach((item) => {
+            const idx = item.indexOf(':');
+            if (idx === -1) { map[item] = item; } else { map[item.slice(0, idx)] = item.slice(idx + 1); }
+          });
+          setStatusLabels(map);
+        } catch { /* デフォルト値を維持 */ }
+      });
+  }, []);
   const [showAreaModal, setShowAreaModal] = useState(false);
   const [focusCenter, setFocusCenter] = useState<[number, number] | null>(null);
 
@@ -240,7 +267,7 @@ function MapPageInner() {
                   selectedCustomer.status === 'contract' ? 'purple' : 'yellow'
                 }`}
               >
-                {STATUS_LABELS[selectedCustomer.status] ?? selectedCustomer.status}
+                {statusLabels[selectedCustomer.status] ?? selectedCustomer.status}
               </span>
               <div className="mt-4">
                 <p className="text-sm text-gray-600">{selectedCustomer.lastWork}</p>

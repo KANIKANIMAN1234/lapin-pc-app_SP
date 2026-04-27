@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase';
@@ -10,14 +10,24 @@ import { useAuthStore } from '@/stores/authStore';
 import type { Photo, ProjectStatus } from '@/types';
 
 // ─── 定数 ───────────────────────────────────────────────────────
-const STATUS_LABELS: Record<ProjectStatus, string> = {
-  inquiry: '問い合わせ',
-  estimate: '見積もり',
-  followup_status: '追客中',
-  contract: '契約',
-  in_progress: '施工中',
-  completed: '完成',
-  lost: '失注',
+const DEFAULT_STATUS_LIST: { value: ProjectStatus; label: string }[] = [
+  { value: 'inquiry',        label: '問い合わせ' },
+  { value: 'estimate',       label: '見積もり' },
+  { value: 'followup_status', label: '追客中' },
+  { value: 'contract',       label: '契約' },
+  { value: 'in_progress',    label: '施工中' },
+  { value: 'completed',      label: '完成' },
+  { value: 'lost',           label: '失注' },
+];
+
+const STATUS_CSS: Record<string, string> = {
+  inquiry:        'status-inquiry',
+  estimate:       'status-estimate',
+  followup_status:'status-followup_status',
+  contract:       'status-contract',
+  in_progress:    'status-in_progress',
+  completed:      'status-completed',
+  lost:           'status-lost',
 };
 
 const PHOTO_TYPE_LABELS: Record<Photo['type'], string> = {
@@ -89,6 +99,31 @@ export default function ProjectDetailPage() {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [toast, setToast] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
+
+  // m_settings からステータス一覧を動的取得
+  const [statusList, setStatusList] = useState(DEFAULT_STATUS_LIST);
+  useEffect(() => {
+    const supabase = createClient();
+    supabase
+      .from('m_settings')
+      .select('value')
+      .eq('key', 'project_status_options')
+      .single()
+      .then(({ data }) => {
+        if (!data?.value) return;
+        try {
+          const parsed: string[] = JSON.parse(data.value);
+          if (!Array.isArray(parsed) || parsed.length === 0) return;
+          const list = parsed.map((item) => {
+            const idx = item.indexOf(':');
+            if (idx === -1) return { value: item as ProjectStatus, label: item };
+            return { value: item.slice(0, idx) as ProjectStatus, label: item.slice(idx + 1) };
+          });
+          setStatusList(list);
+        } catch { /* パース失敗時はデフォルト値を維持 */ }
+      });
+  }, []);
+  const statusLabelMap = Object.fromEntries(statusList.map((s) => [s.value, s.label]));
 
   // 編集状態
   const [editingStatus, setEditingStatus] = useState(false);
@@ -343,13 +378,13 @@ export default function ProjectDetailPage() {
               autoFocus
               disabled={isUpdating}
             >
-              {Object.entries(STATUS_LABELS).map(([s, l]) => (
-                <option key={s} value={s}>{l}</option>
+              {statusList.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
               ))}
             </select>
           ) : (
-            <button onClick={() => setEditingStatus(true)} className={`badge ${project.status} cursor-pointer`}>
-              {STATUS_LABELS[project.status as ProjectStatus]} ▾
+            <button onClick={() => setEditingStatus(true)} className={`badge ${STATUS_CSS[project.status] ?? 'status-inquiry'} cursor-pointer`}>
+              {statusLabelMap[project.status] ?? project.status} ▾
             </button>
           )}
           {project.drive_folder_url && (
