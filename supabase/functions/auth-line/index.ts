@@ -154,11 +154,20 @@ Deno.serve(async (req: Request) => {
 
     if (!dbUser) {
       // ── 新規ユーザー ──────────────────────────────────────
+      // m_users に name で既存レコードがある場合（SQL で事前投入済み）の role を引き継ぐ
+      const { data: preExistingUser } = await supabaseAdmin
+        .from('m_users')
+        .select('role')
+        .eq('name', displayName)
+        .is('line_user_id', null)
+        .single();
+      const initialRole = preExistingUser?.role ?? 'sales';
+
       const { data: newAuthData, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email: userEmail,
         user_metadata: {
           name: displayName,
-          role: 'sales',
+          role: initialRole,
           line_user_id: lineUserId,
           avatar_url: avatarUrl,
         },
@@ -185,7 +194,7 @@ Deno.serve(async (req: Request) => {
             line_user_id: lineUserId,
             email: lineEmail,
             name: displayName,
-            role: 'sales',
+            role: initialRole,
             avatar_url: avatarUrl,
             status: 'active',
           },
