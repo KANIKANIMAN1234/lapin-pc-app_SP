@@ -1,32 +1,32 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuthStore } from '@/stores/authStore';
+import { createClient } from '@/lib/supabase';
 import type { Project, ProjectStatus } from '@/types';
 
-const STATUS_LABELS: Record<ProjectStatus, string> = {
-  inquiry: '問い合わせ',
-  estimate: '見積もり',
-  followup_status: '追客中',
-  contract: '契約',
-  in_progress: '施工中',
-  completed: '完成',
-  lost: '失注',
-};
+// デフォルトのステータス定義（m_settings 未設定時のフォールバック）
+const DEFAULT_STATUS_LIST: { value: ProjectStatus; label: string }[] = [
+  { value: 'inquiry',        label: '問い合わせ' },
+  { value: 'estimate',       label: '見積もり' },
+  { value: 'followup_status', label: '追客中' },
+  { value: 'contract',       label: '契約' },
+  { value: 'in_progress',    label: '施工中' },
+  { value: 'completed',      label: '完成' },
+  { value: 'lost',           label: '失注' },
+];
 
-const STATUS_CSS: Record<ProjectStatus, string> = {
-  inquiry: 'status-inquiry',
-  estimate: 'status-estimate',
-  followup_status: 'status-followup_status',
-  contract: 'status-contract',
-  in_progress: 'status-in_progress',
-  completed: 'status-completed',
-  lost: 'status-lost',
+const STATUS_CSS: Record<string, string> = {
+  inquiry:        'status-inquiry',
+  estimate:       'status-estimate',
+  followup_status:'status-followup_status',
+  contract:       'status-contract',
+  in_progress:    'status-in_progress',
+  completed:      'status-completed',
+  lost:           'status-lost',
 };
-
-const ALL_STATUSES: ProjectStatus[] = ['inquiry', 'estimate', 'followup_status', 'contract', 'in_progress', 'completed', 'lost'];
 
 function formatYen(v: number | undefined) {
   if (v == null) return '-';
@@ -42,6 +42,32 @@ export default function ProjectsPage() {
   const [sortKey, setSortKey] = useState<'inquiry_date' | 'contract_amount' | 'status'>('inquiry_date');
   const [sortAsc, setSortAsc] = useState(false);
 
+  // m_settings からステータス一覧を取得
+  const [statusList, setStatusList] = useState(DEFAULT_STATUS_LIST);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase
+      .from('m_settings')
+      .select('value')
+      .eq('key', 'project_status_options')
+      .single()
+      .then(({ data }) => {
+        if (!data?.value) return;
+        try {
+          // 保存形式: ["inquiry:問い合わせ", "estimate:見積もり", ...]
+          const parsed: string[] = JSON.parse(data.value);
+          if (!Array.isArray(parsed) || parsed.length === 0) return;
+          const list = parsed.map((item) => {
+            const idx = item.indexOf(':');
+            if (idx === -1) return { value: item as ProjectStatus, label: item };
+            return { value: item.slice(0, idx) as ProjectStatus, label: item.slice(idx + 1) };
+          });
+          setStatusList(list);
+        } catch { /* パース失敗時はデフォルト値を維持 */ }
+      });
+  }, []);
+
   const { data: projects, isLoading } = useProjects({
     status: selectedStatuses.length > 0 ? selectedStatuses : undefined,
     keyword: keyword || undefined,
@@ -54,11 +80,14 @@ export default function ProjectsPage() {
     );
   };
 
+  const statusOrder = statusList.map((s) => s.value);
+  const statusLabelMap = Object.fromEntries(statusList.map((s) => [s.value, s.label]));
+
   const sorted = [...(projects ?? [])].sort((a, b) => {
     let cmp = 0;
     if (sortKey === 'inquiry_date') cmp = a.inquiry_date.localeCompare(b.inquiry_date);
     else if (sortKey === 'contract_amount') cmp = (a.contract_amount ?? 0) - (b.contract_amount ?? 0);
-    else if (sortKey === 'status') cmp = ALL_STATUSES.indexOf(a.status) - ALL_STATUSES.indexOf(b.status);
+    else if (sortKey === 'status') cmp = statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status);
     return sortAsc ? cmp : -cmp;
   });
 
@@ -93,17 +122,17 @@ export default function ProjectsPage() {
           <div className="search-field">
             <label>ステータス</label>
             <div className="flex flex-wrap gap-1 mt-1">
-              {ALL_STATUSES.map((s) => (
+              {statusList.map(({ value, label }) => (
                 <button
-                  key={s}
-                  onClick={() => toggleStatus(s)}
+                  key={value}
+                  onClick={() => toggleStatus(value)}
                   className={`px-2 py-0.5 text-xs rounded-full border transition ${
-                    selectedStatuses.includes(s)
+                    selectedStatuses.includes(value)
                       ? 'bg-green-600 text-white border-green-600'
                       : 'bg-white text-gray-600 border-gray-200'
                   }`}
                 >
-                  {STATUS_LABELS[s]}
+                  {label}
                 </button>
               ))}
             </div>
@@ -189,8 +218,8 @@ export default function ProjectsPage() {
                       </div>
                     </td>
                     <td>
-                      <span className={`badge ${STATUS_CSS[project.status]}`}>
-                        {STATUS_LABELS[project.status]}
+                      <span className={`badge ${STATUS_CSS[project.status] ?? 'status-inquiry'}`}>
+                        {statusLabelMap[project.status] ?? project.status}
                       </span>
                     </td>
                     <td className="text-right font-medium">

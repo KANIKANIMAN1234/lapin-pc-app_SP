@@ -9,6 +9,15 @@ import type { ProjectStatus } from '@/types';
 
 const DEFAULT_WORK_TYPES = ['外壁塗装', '屋根塗装', '防水工事', '内装工事', 'リフォーム', 'その他'];
 const DEFAULT_ACQUISITION_ROUTES = ['チラシ', '紹介', 'Web', 'LINE', '訪問', 'その他'];
+const DEFAULT_STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
+  { value: 'inquiry',        label: '問い合わせ' },
+  { value: 'estimate',       label: '見積もり' },
+  { value: 'followup_status', label: '追客中' },
+  { value: 'contract',       label: '契約' },
+  { value: 'in_progress',    label: '施工中' },
+  { value: 'completed',      label: '完成' },
+  { value: 'lost',           label: '失注' },
+];
 
 export default function NewProjectPage() {
   const router = useRouter();
@@ -17,6 +26,7 @@ export default function NewProjectPage() {
 
   const [workTypes, setWorkTypes] = useState<string[]>(DEFAULT_WORK_TYPES);
   const [acquisitionRoutes, setAcquisitionRoutes] = useState<string[]>(DEFAULT_ACQUISITION_ROUTES);
+  const [statusOptions, setStatusOptions] = useState(DEFAULT_STATUS_OPTIONS);
 
   // m_settings からマスターデータを取得
   useEffect(() => {
@@ -24,7 +34,7 @@ export default function NewProjectPage() {
     supabase
       .from('m_settings')
       .select('key, value')
-      .in('key', ['work_type_options', 'acquisition_route_options'])
+      .in('key', ['work_type_options', 'acquisition_route_options', 'project_status_options'])
       .then(({ data }) => {
         if (!data) return;
         data.forEach((row) => {
@@ -33,6 +43,15 @@ export default function NewProjectPage() {
             if (!Array.isArray(values) || values.length === 0) return;
             if (row.key === 'work_type_options') setWorkTypes(values);
             if (row.key === 'acquisition_route_options') setAcquisitionRoutes(values);
+            if (row.key === 'project_status_options') {
+              // 形式: ["inquiry:問い合わせ", "estimate:見積もり", ...]
+              const list = values.map((item) => {
+                const idx = item.indexOf(':');
+                if (idx === -1) return { value: item as ProjectStatus, label: item };
+                return { value: item.slice(0, idx) as ProjectStatus, label: item.slice(idx + 1) };
+              });
+              setStatusOptions(list);
+            }
           } catch { /* JSON パース失敗時はデフォルト値を維持 */ }
         });
       });
@@ -254,10 +273,9 @@ export default function NewProjectPage() {
                 onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as ProjectStatus }))}
                 className="form-input"
               >
-                <option value="inquiry">問い合わせ</option>
-                <option value="estimate">見積もり</option>
-                <option value="followup_status">追客中</option>
-                <option value="contract">契約</option>
+                {statusOptions.map(({ value, label }) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
               </select>
             </div>
           </div>

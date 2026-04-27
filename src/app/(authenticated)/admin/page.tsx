@@ -26,6 +26,7 @@ const ROLE_LABELS: Record<string, string> = {
 const MASTER_DEFS = [
   { key: 'work_type_options',       label: '工事種別',     icon: 'construction',  desc: '案件登録で使用する工事の種類' },
   { key: 'acquisition_route_options', label: '集客ルート', icon: 'campaign',      desc: '案件の集客経路' },
+  { key: 'project_status_options',  label: '案件ステータス', icon: 'flag',        desc: '案件のステータス一覧（値:ラベル の形式で入力）' },
   { key: 'expense_category_options', label: '経費カテゴリ', icon: 'receipt_long', desc: '経費登録で使用するカテゴリ' },
   { key: 'meeting_type_options',    label: '商談種別',     icon: 'handshake',     desc: '商談記録で使用する種別' },
 ];
