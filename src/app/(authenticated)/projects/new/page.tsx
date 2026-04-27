@@ -1,18 +1,42 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCreateProject } from '@/hooks/useProjects';
 import { useAuthStore } from '@/stores/authStore';
+import { createClient } from '@/lib/supabase';
 import type { ProjectStatus } from '@/types';
 
-const WORK_TYPES = ['外壁塗装', '屋根塗装', '防水工事', '内装工事', 'リフォーム', 'その他'];
-const ACQUISITION_ROUTES = ['チラシ', '紹介', 'Web', 'LINE', '訪問', 'その他'];
+const DEFAULT_WORK_TYPES = ['外壁塗装', '屋根塗装', '防水工事', '内装工事', 'リフォーム', 'その他'];
+const DEFAULT_ACQUISITION_ROUTES = ['チラシ', '紹介', 'Web', 'LINE', '訪問', 'その他'];
 
 export default function NewProjectPage() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { mutateAsync: createProject, isPending } = useCreateProject();
+
+  const [workTypes, setWorkTypes] = useState<string[]>(DEFAULT_WORK_TYPES);
+  const [acquisitionRoutes, setAcquisitionRoutes] = useState<string[]>(DEFAULT_ACQUISITION_ROUTES);
+
+  // m_settings からマスターデータを取得
+  useEffect(() => {
+    const supabase = createClient();
+    supabase
+      .from('m_settings')
+      .select('key, value')
+      .in('key', ['work_type_options', 'acquisition_route_options'])
+      .then(({ data }) => {
+        if (!data) return;
+        data.forEach((row) => {
+          try {
+            const values: string[] = JSON.parse(row.value);
+            if (!Array.isArray(values) || values.length === 0) return;
+            if (row.key === 'work_type_options') setWorkTypes(values);
+            if (row.key === 'acquisition_route_options') setAcquisitionRoutes(values);
+          } catch { /* JSON パース失敗時はデフォルト値を維持 */ }
+        });
+      });
+  }, []);
 
   const [form, setForm] = useState({
     customer_name: '',
@@ -167,7 +191,7 @@ export default function NewProjectPage() {
           <div className="form-group">
             <label>工事種別 <span className="required">*</span></label>
             <div className="flex flex-wrap gap-2 mt-1">
-              {WORK_TYPES.map((wt) => (
+              {workTypes.map((wt) => (
                 <label key={wt} className="wt-chip">
                   <input
                     type="checkbox"
@@ -209,7 +233,7 @@ export default function NewProjectPage() {
                 className="form-input"
               >
                 <option value="">選択してください</option>
-                {ACQUISITION_ROUTES.map((r) => (
+                {acquisitionRoutes.map((r) => (
                   <option key={r} value={r}>{r}</option>
                 ))}
               </select>
