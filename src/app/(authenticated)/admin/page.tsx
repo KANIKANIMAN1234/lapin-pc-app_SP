@@ -383,18 +383,18 @@ export default function AdminPage() {
                 { key: 'drive_root_folder_id', label: 'Google DriveルートフォルダID', placeholder: '例: 1a2b3c4d5e...', icon: 'folder' },
               ].map(({ key, label, placeholder, icon }) => (
                 <div key={key}>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                    <span className="material-icons text-gray-400" style={{ fontSize: 18 }}>{icon}</span>
+                    {label}
+                  </label>
                   <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <span className="material-icons absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xl">{icon}</span>
-                      <input
-                        type="text"
-                        className="form-input pl-10 w-full"
-                        placeholder={placeholder}
-                        value={companySettings[key] ?? ''}
-                        onChange={(e) => setCompanySettings((p) => ({ ...p, [key]: e.target.value }))}
-                      />
-                    </div>
+                    <input
+                      type="text"
+                      className="form-input flex-1"
+                      placeholder={placeholder}
+                      value={companySettings[key] ?? ''}
+                      onChange={(e) => setCompanySettings((p) => ({ ...p, [key]: e.target.value }))}
+                    />
                     <button
                       className="btn-primary shrink-0 py-2 px-4 text-sm"
                       onClick={() => saveSetting(key, companySettings[key] ?? '', label)}
