@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useProjects } from '@/hooks/useProjects';
+import { useProjects, useUpdateProject } from '@/hooks/useProjects';
 import { useAuthStore } from '@/stores/authStore';
 import { createClient } from '@/lib/supabase';
 import type { Project, ProjectStatus } from '@/types';
@@ -34,13 +34,42 @@ function formatYen(v: number | undefined) {
   return `${v.toLocaleString()}円`;
 }
 
+const STATUS_BG: Record<string, string> = {
+  inquiry:         '#eab308',
+  estimate:        '#f97316',
+  followup_status: '#f97316',
+  contract:        '#7c3aed',
+  in_progress:     '#2563eb',
+  completed:       '#059669',
+  lost:            '#9ca3af',
+};
+
 export default function ProjectsPage() {
   const { user } = useAuthStore();
+  const updateProject = useUpdateProject();
   const [keyword, setKeyword] = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState<ProjectStatus[]>([]);
   const [myOnly, setMyOnly] = useState(false);
   const [sortKey, setSortKey] = useState<'inquiry_date' | 'contract_amount' | 'status'>('inquiry_date');
   const [sortAsc, setSortAsc] = useState(false);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 2500);
+  };
+
+  const handleStatusChange = async (projectId: string, newStatus: ProjectStatus) => {
+    setUpdatingId(projectId);
+    try {
+      await updateProject.mutateAsync({ id: projectId, status: newStatus });
+      showToast('ステータスを更新しました');
+    } catch {
+      showToast('更新に失敗しました', 'error');
+    }
+    setUpdatingId(null);
+  };
 
   // m_settings からステータス一覧を取得
   const [statusList, setStatusList] = useState(DEFAULT_STATUS_LIST);
@@ -98,6 +127,14 @@ export default function ProjectsPage() {
 
   return (
     <div>
+      {/* トースト */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium
+          ${toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+          {toast.msg}
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold">案件一覧</h2>
         <Link href="/projects/new" className="btn-primary">
@@ -218,9 +255,32 @@ export default function ProjectsPage() {
                       </div>
                     </td>
                     <td>
-                      <span className={`badge ${STATUS_CSS[project.status] ?? 'status-inquiry'}`}>
-                        {statusLabelMap[project.status] ?? project.status}
-                      </span>
+                      {updatingId === project.id ? (
+                        <span className="inline-block w-4 h-4 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin" />
+                      ) : (
+                        <select
+                          value={project.status}
+                          onChange={(e) => handleStatusChange(project.id, e.target.value as ProjectStatus)}
+                          style={{
+                            background: STATUS_BG[project.status] ?? '#9ca3af',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '9999px',
+                            padding: '2px 8px',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            appearance: 'none',
+                            WebkitAppearance: 'none',
+                            outline: 'none',
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {statusList.map(({ value, label }) => (
+                            <option key={value} value={value}>{label}</option>
+                          ))}
+                        </select>
+                      )}
                     </td>
                     <td className="text-right font-medium">
                       {formatYen(project.contract_amount)}
