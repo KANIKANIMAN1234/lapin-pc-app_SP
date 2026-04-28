@@ -111,6 +111,24 @@ export default function NewProjectPage() {
         followup_flag: false,
         inspection_flag: false,
       });
+
+      // ── LINE通知（fire-and-forget）──────────────────────────
+      fetch('/api/line-notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerName: form.customer_name,
+          address: form.address,
+          workDescription: form.work_description || undefined,
+          workType: form.work_type,
+          estimatedAmount: Number(form.estimated_amount) || 0,
+          acquisitionRoute: form.acquisition_route,
+          inquiryDate: form.inquiry_date,
+          assignedUserName: user?.name ?? undefined,
+          assignedLineUserId: user?.line_user_id ?? undefined,
+        }),
+      }).catch((e) => console.error('[new-project] line-notify error:', e));
+
       router.push(`/projects/${data.id}`);
     } catch (err) {
       setError('案件の登録に失敗しました: ' + String(err));
