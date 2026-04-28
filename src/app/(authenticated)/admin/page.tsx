@@ -14,6 +14,7 @@ interface EmployeeRow {
   phone?: string;
   line_user_id?: string;
   status: 'active' | 'retired';
+  can_register_project: boolean;
   created_at: string;
 }
 
@@ -74,13 +75,14 @@ export default function AdminPage() {
   const [editRole, setEditRole] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [editCanRegister, setEditCanRegister] = useState(false);
 
   const fetchEmployees = useCallback(async () => {
     setEmpLoading(true);
     const supabase = createClient();
     const { data, error } = await supabase
       .from('m_users')
-      .select('id, name, email, role, phone, line_user_id, status, created_at')
+      .select('id, name, email, role, phone, line_user_id, status, can_register_project, created_at')
       .order('created_at', { ascending: true });
     if (!error && data) setEmployees(data as EmployeeRow[]);
     setEmpLoading(false);
@@ -117,7 +119,21 @@ export default function AdminPage() {
     setEditTarget(emp);
     setEditName(emp.name); setEditRole(emp.role);
     setEditEmail(emp.email ?? ''); setEditPhone(emp.phone ?? '');
+    setEditCanRegister(emp.can_register_project ?? false);
     setShowEditModal(true);
+  };
+
+  // SP新規登録権限のインライントグル（テーブル行から即時変更）
+  const handleToggleRegisterProject = async (emp: EmployeeRow) => {
+    if (emp.role === 'admin') return; // admin は常にtrue（変更不要）
+    const newVal = !emp.can_register_project;
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('m_users')
+      .update({ can_register_project: newVal })
+      .eq('id', emp.id);
+    if (error) showToast('権限の更新に失敗しました', 'error');
+    else { showToast(`${emp.name} さんのSP新規登録権限を${newVal ? 'ON' : 'OFF'}にしました`); fetchEmployees(); }
   };
 
   const handleEdit = async (e: React.FormEvent) => {
@@ -128,6 +144,7 @@ export default function AdminPage() {
     const { error } = await supabase.from('m_users').update({
       name: editName, role: editRole,
       email: editEmail || null, phone: editPhone || null,
+      can_register_project: editRole === 'admin' ? true : editCanRegister,
     }).eq('id', editTarget.id);
     setSubmitting(false);
     if (error) {
@@ -306,7 +323,7 @@ export default function AdminPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    {['氏名', '役職', 'メール', 'LINE連携', '登録日', 'ステータス', '操作'].map((h) => (
+                    {['氏名', '役職', 'メール', 'LINE連携', 'SP新規登録', '登録日', 'ステータス', '操作'].map((h) => (
                       <th key={h} className="text-left px-4 py-2.5 font-medium text-gray-600 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -326,6 +343,21 @@ export default function AdminPage() {
                           ? <span className="text-green-600 flex items-center gap-1"><span className="material-icons text-base">check_circle</span>済</span>
                           : <span className="text-gray-400 flex items-center gap-1"><span className="material-icons text-base">cancel</span>未</span>
                         }
+                      </td>
+                      <td className="px-4 py-3">
+                        {emp.role === 'admin' ? (
+                          <span className="text-blue-600 flex items-center gap-1 text-xs">
+                            <span className="material-icons text-base">smartphone</span>常時ON
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleToggleRegisterProject(emp)}
+                            title="SP新規登録権限の切り替え"
+                            className={`relative inline-flex items-center h-6 w-11 rounded-full transition-colors ${emp.can_register_project ? 'bg-green-500' : 'bg-gray-300'}`}
+                          >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${emp.can_register_project ? 'translate-x-6' : 'translate-x-1'}`} />
+                          </button>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-gray-500">{emp.created_at ? new Date(emp.created_at).toLocaleDateString('ja-JP') : '—'}</td>
                       <td className="px-4 py-3">
@@ -357,7 +389,7 @@ export default function AdminPage() {
                     </tr>
                   ))}
                   {filteredEmployees.length === 0 && (
-                    <tr><td colSpan={7} className="text-center py-10 text-gray-400">該当する従業員がいません</td></tr>
+                    <tr><td colSpan={8} className="text-center py-10 text-gray-400">該当する従業員がいません</td></tr>
                   )}
                 </tbody>
               </table>
@@ -570,6 +602,26 @@ export default function AdminPage() {
                 <div className="form-group col-span-2">
                   <label>メールアドレス</label>
                   <input type="email" className="form-input" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
+                </div>
+                <div className="form-group col-span-2">
+                  <label className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <span className="material-icons text-base text-gray-400">smartphone</span>
+                      SP新規登録権限
+                    </span>
+                    {editRole === 'admin' ? (
+                      <span className="text-xs text-blue-600 font-medium">管理者は常時ON</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setEditCanRegister((v) => !v)}
+                        className={`relative inline-flex items-center h-6 w-11 rounded-full transition-colors ${editCanRegister ? 'bg-green-500' : 'bg-gray-300'}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${editCanRegister ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                    )}
+                  </label>
+                  <p className="text-xs text-gray-400 mt-1">ONにするとモバイルアプリに「新規案件登録」タブが表示されます</p>
                 </div>
               </div>
               <div className="modal-footer">
