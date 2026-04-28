@@ -128,15 +128,18 @@ function MapPageInner() {
     }
     setThumbnailUrl(undefined);
     const supabase = createClient();
-    supabase
-      .from('t_projects')
-      .select('map_thumbnail_url')
-      .eq('id', selectedCustomer.id)
-      .single()
-      .then(({ data }) => {
-        setThumbnailUrl(data?.map_thumbnail_url ?? null);
-      })
-      .catch(() => setThumbnailUrl(null));
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('t_projects')
+          .select('map_thumbnail_url')
+          .eq('id', selectedCustomer.id)
+          .single();
+        setThumbnailUrl((data as { map_thumbnail_url?: string | null } | null)?.map_thumbnail_url ?? null);
+      } catch {
+        setThumbnailUrl(null);
+      }
+    })();
   }, [selectedCustomer?.id]);
 
   const isSales = user?.role === 'sales';
