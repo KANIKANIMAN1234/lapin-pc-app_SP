@@ -266,6 +266,7 @@ function MapPageInner() {
           </div>
           <hr style={{ margin: '12px 0', border: 'none', borderTop: '1px solid #e5e7eb' }} />
 
+          {/* 顧客情報（マーカー選択時のみ表示） */}
           {selectedCustomer ? (
             <>
               <h3 className="text-lg font-semibold mb-1">{selectedCustomer.name}</h3>
@@ -291,22 +292,24 @@ function MapPageInner() {
                 <span className="material-icons text-base">open_in_new</span>
                 案件詳細を見る
               </Link>
+              <hr style={{ margin: '16px 0', border: 'none', borderTop: '1px solid #e5e7eb' }} />
             </>
           ) : (
-            <div className="text-gray-500 text-sm mt-2">
-              <p>マップ上のマーカーをクリックして顧客情報を表示</p>
-              <div className="mt-4 text-xs">
-                <p className="font-medium mb-2">マーカー色の凡例:</p>
-                <ul className="space-y-1">
-                  <li><span className="inline-block w-3 h-3 rounded-full bg-green-600 mr-1.5 align-middle" />完工</li>
-                  <li><span className="inline-block w-3 h-3 rounded-full bg-blue-600 mr-1.5 align-middle" />施工中</li>
-                  <li><span className="inline-block w-3 h-3 rounded-full bg-amber-500 mr-1.5 align-middle" />見積中</li>
-                  <li><span className="inline-block w-3 h-3 rounded-full bg-purple-600 mr-1.5 align-middle" />契約済</li>
-                  <li><span className="inline-block w-3 h-3 rounded-full bg-gray-400 mr-1.5 align-middle" />問い合わせ</li>
-                </ul>
-              </div>
-            </div>
+            <p className="text-gray-500 text-sm mt-2 mb-4">マップ上のマーカーをクリックして顧客情報を表示</p>
           )}
+
+          {/* 凡例（常時表示） */}
+          <div className="text-xs">
+            <p className="font-medium text-gray-700 mb-2">マーカー色の凡例:</p>
+            <ul className="space-y-1.5">
+              <li><span className="inline-block w-3 h-3 rounded-full bg-green-600 mr-1.5 align-middle" />完工</li>
+              <li><span className="inline-block w-3 h-3 rounded-full bg-blue-600 mr-1.5 align-middle" />施工中</li>
+              <li><span className="inline-block w-3 h-3 rounded-full bg-amber-500 mr-1.5 align-middle" />見積中</li>
+              <li><span className="inline-block w-3 h-3 rounded-full bg-purple-600 mr-1.5 align-middle" />契約済</li>
+              <li><span className="inline-block w-3 h-3 rounded-full bg-orange-500 mr-1.5 align-middle" />追客中</li>
+              <li><span className="inline-block w-3 h-3 rounded-full bg-gray-400 mr-1.5 align-middle" />問い合わせ</li>
+            </ul>
+          </div>
         </div>
       </div>
 
