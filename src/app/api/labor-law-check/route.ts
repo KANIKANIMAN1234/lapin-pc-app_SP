@@ -51,7 +51,7 @@ async function isAlreadyNotified(
     .from('m_settings')
     .select('value')
     .eq('key', key)
-    .maybeSingle();
+    .maybeSingle() as { data: { value: string } | null };
   return data?.value === '1';
 }
 
@@ -83,7 +83,7 @@ async function sendAlert(
     .from('m_users')
     .select('line_user_id')
     .eq('role', 'admin')
-    .eq('status', 'active');
+    .eq('status', 'active') as { data: { line_user_id: string }[] | null };
   for (const a of admins ?? []) {
     if (a.line_user_id && !sentIds.has(a.line_user_id)) {
       await sendPush(a.line_user_id, message, accessToken);
@@ -96,7 +96,7 @@ async function sendAlert(
       .from('m_users')
       .select('line_user_id')
       .eq('id', hrPersonId)
-      .single();
+      .single() as { data: { line_user_id: string } | null };
     if (hr?.line_user_id && !sentIds.has(hr.line_user_id)) {
       await sendPush(hr.line_user_id, message, accessToken);
       sentIds.add(hr.line_user_id);
@@ -145,13 +145,13 @@ export async function POST(req: NextRequest) {
         'attendance_standard_daily_hours',
         'hr_person_id',
         'labor_law_check_enabled',
-        'labor_overtime_warn',    // 独自の残業注意時間（デフォルト45h）
-        'labor_overtime_alert',   // 過労死ライン警告（デフォルト80h）
-        'labor_overtime_critical', // 絶対上限警告（デフォルト100h）
-      ]);
+        'labor_overtime_warn',
+        'labor_overtime_alert',
+        'labor_overtime_critical',
+      ]) as { data: { key: string; value: string }[] | null };
 
     const s: Record<string, string> = {};
-    (settingsRows ?? []).forEach((r: { key: string; value: string }) => { s[r.key] = r.value; });
+    (settingsRows ?? []).forEach((r) => { s[r.key] = r.value; });
 
     if (s['labor_law_check_enabled'] === '0') {
       return NextResponse.json({ success: true, skipped: true });
@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
       .from('m_users')
       .select('name, line_user_id')
       .eq('id', user_id)
-      .single();
+      .single() as { data: { name: string; line_user_id: string } | null };
     const userName = targetUser?.name ?? 'スタッフ';
     const targetLine = targetUser?.line_user_id ?? null;
 
@@ -257,7 +257,7 @@ export async function POST(req: NextRequest) {
         .select('clock_out')
         .eq('user_id', user_id)
         .eq('date', prevDateStr)
-        .maybeSingle();
+        .maybeSingle() as { data: { clock_out: string } | null };
 
       if (prevAtt?.clock_out) {
         const toMinOfDay = (t: string) => {
@@ -306,9 +306,9 @@ export async function POST(req: NextRequest) {
         .select('date')
         .eq('user_id', user_id)
         .in('date', past7)
-        .not('clock_in', 'is', null);
+        .not('clock_in', 'is', null) as { data: { date: string }[] | null };
 
-      const workedDays = new Set((recentAtt ?? []).map((r: { date: string }) => r.date));
+      const workedDays = new Set((recentAtt ?? []).map((r) => r.date));
       let consecutive = 1;
       for (let i = 1; i <= 7; i++) {
         const d = new Date(checkDate);
@@ -351,7 +351,7 @@ export async function POST(req: NextRequest) {
         .eq('user_id', user_id)
         .gte('date', fromDate)
         .lte('date', toDate)
-        .not('total_work_minutes', 'is', null);
+        .not('total_work_minutes', 'is', null) as { data: { total_work_minutes: number }[] | null };
 
       const totalOvertimeMin = (monthRecords ?? []).reduce((sum, r) => {
         return sum + Math.max(0, (r.total_work_minutes ?? 0) - standardDailyMinutes);
