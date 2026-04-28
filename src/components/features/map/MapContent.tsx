@@ -149,18 +149,20 @@ function MapContent({
         onGeocodingProgress?.(remaining);
 
         if (coords) {
-          const [lat, lng] = coords;
-          const { error: updateErr } = await supabase
-            .from('t_projects')
-            .update({ lat, lng })
-            .eq('id', p.id);
-
-          if (updateErr) {
-            console.error('[Map] lat/lng save error:', updateErr);
-          } else {
-            setCustomers((prev) => [...prev, toMapCustomer({ ...p, lat, lng })]);
-          }
-        }
+              const [lat, lng] = coords;
+              // サービスロールキー経由のAPIで保存（RLSをバイパス）
+              const saveRes = await fetch('/api/save-geocode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: p.id, lat, lng }),
+              });
+              if (!saveRes.ok) {
+                const err = await saveRes.json().catch(() => ({}));
+                console.error('[Map] lat/lng save error:', err);
+              } else {
+                setCustomers((prev) => [...prev, toMapCustomer({ ...p, lat, lng })]);
+              }
+            }
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
