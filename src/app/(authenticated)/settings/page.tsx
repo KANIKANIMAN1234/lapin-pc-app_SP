@@ -238,39 +238,6 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* システム設定（admin のみ） */}
-      {user?.role === 'admin' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="font-bold text-lg mb-5 flex items-center gap-2">
-            <span className="material-icons text-green-600">settings</span>システム設定
-            <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded ml-1">管理者のみ</span>
-          </h3>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                粗利率アラート閾値（%）
-              </label>
-              <p className="text-xs text-gray-400 mb-2">この粗利率を下回る案件にアラートを表示します</p>
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  className="form-input w-32"
-                  value={bonusAlertRate}
-                  onChange={(e) => setBonusAlertRate(e.target.value)}
-                />
-                <span className="flex items-center text-gray-500">%</span>
-                <button onClick={handleSaveSystemSettings} className="btn-primary text-sm py-2 px-4">
-                  <span className="material-icons text-base">save</span>保存
-                </button>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      )}
-
       {/* 勤怠設定（admin のみ） */}
       {user?.role === 'admin' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
