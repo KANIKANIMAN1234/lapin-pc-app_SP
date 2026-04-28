@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useDashboard } from '@/hooks/useDashboard';
+import NoticesTab from '@/components/notices/NoticesTab';
 import { Bar, Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -462,23 +463,4 @@ function CalendarTab() {
   );
 }
 
-// ============================================================
-// 連絡事項タブ（Supabase版 - settings テーブルの notices を使用）
-// ============================================================
-function NoticesTab() {
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-5">
-        <h2 className="text-lg font-bold flex items-center gap-2">
-          <span className="material-icons text-green-600">campaign</span>
-          連絡事項
-        </h2>
-      </div>
-      <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-        <span className="material-icons text-gray-200" style={{ fontSize: 48 }}>forum</span>
-        <p className="text-gray-400 mt-3">連絡事項機能は実装中です</p>
-        <p className="text-xs text-gray-300 mt-1">Supabase の notices テーブルと Edge Function を実装後に利用可能になります</p>
-      </div>
-    </div>
-  );
-}
+// NoticesTab は src/components/notices/NoticesTab.tsx に実装済み
