@@ -43,6 +43,7 @@ export interface MapCustomer {
   lastWork: string;
   address?: string;
   assignedTo?: string;
+  thumbnailUrl?: string;
 }
 
 function createCustomIcon(status: string, name: string, editMode = false, saving = false) {
@@ -167,7 +168,7 @@ function MapContent({
     geocodingRef.current = true;
 
     const supabase = createClient();
-    const SELECT = 'id, customer_name, lat, lng, status, work_type, inquiry_date, address, assigned_to';
+    const SELECT = 'id, customer_name, lat, lng, status, work_type, inquiry_date, address, assigned_to, map_thumbnail_url';
 
     (async () => {
       // ① 座標あり → 即表示
@@ -352,6 +353,7 @@ function toMapCustomer(p: {
   inquiry_date: string | null;
   address: string | null;
   assigned_to: string | number | null;
+  map_thumbnail_url?: string | null;
 }): MapCustomer {
   return {
     id: String(p.id),
@@ -364,6 +366,7 @@ function toMapCustomer(p: {
     }`,
     address: p.address ?? undefined,
     assignedTo: p.assigned_to ? String(p.assigned_to) : undefined,
+    thumbnailUrl: p.map_thumbnail_url ?? undefined,
   };
 }
 

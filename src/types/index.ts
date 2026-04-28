@@ -54,6 +54,7 @@ export interface Project {
   inspection_flag?: boolean;
   lat?: number;
   lng?: number;
+  map_thumbnail_url?: string | null;
   drive_folder_id?: string;
   drive_folder_url?: string;
   notes?: string;

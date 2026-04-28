@@ -567,23 +567,53 @@ export default function ProjectDetailPage() {
             </div>
           ) : (
             <div className="photo-gallery">
-              {filteredPhotos.map((photo) => (
-                <div key={photo.id} className="photo-item group relative">
-                  <img
-                    src={photo.thumbnail_url}
-                    alt={photo.file_name ?? '写真'}
-                    className="w-full h-full object-cover cursor-pointer"
-                    onClick={() => setLightboxUrl(photo.drive_url)}
-                    loading="lazy"
-                  />
-                  <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-2 py-1 flex justify-between items-center">
-                    <span>{PHOTO_TYPE_LABELS[photo.type]}</span>
-                    <button onClick={() => handleDeletePhoto(photo.id)} className="opacity-0 group-hover:opacity-100 transition">
-                      <span className="material-icons" style={{ fontSize: 14 }}>delete</span>
-                    </button>
+              {filteredPhotos.map((photo) => {
+                const isMapThumbnail = project.map_thumbnail_url === photo.thumbnail_url;
+                return (
+                  <div key={photo.id} className="photo-item group relative">
+                    {isMapThumbnail && (
+                      <div className="absolute top-1.5 left-1.5 z-10 flex items-center gap-0.5 bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow">
+                        <span className="material-icons" style={{ fontSize: 10 }}>map</span>
+                        地図用
+                      </div>
+                    )}
+                    <img
+                      src={photo.thumbnail_url}
+                      alt={photo.file_name ?? '写真'}
+                      className="w-full h-full object-cover cursor-pointer"
+                      onClick={() => setLightboxUrl(photo.drive_url)}
+                      loading="lazy"
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-2 py-1 flex justify-between items-center gap-1">
+                      <span>{PHOTO_TYPE_LABELS[photo.type]}</span>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                        <button
+                          title="地図サムネイルに設定"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (isMapThumbnail) {
+                              await updateProject({ id: projectId, map_thumbnail_url: null });
+                              showToast('地図サムネイルを解除しました');
+                            } else {
+                              await updateProject({ id: projectId, map_thumbnail_url: photo.thumbnail_url });
+                              showToast('地図サムネイルに設定しました');
+                            }
+                          }}
+                          className={`flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full font-bold transition ${
+                            isMapThumbnail ? 'bg-green-400 text-white' : 'bg-white/90 text-gray-700 hover:bg-green-400 hover:text-white'
+                          }`}
+                        >
+                          <span className="material-icons" style={{ fontSize: 11 }}>map</span>
+                          {isMapThumbnail ? '解除' : '地図用に設定'}
+                        </button>
+                        <button onClick={() => handleDeletePhoto(photo.id)}>
+                          <span className="material-icons" style={{ fontSize: 14 }}>delete</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

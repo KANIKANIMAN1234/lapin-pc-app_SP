@@ -330,6 +330,24 @@ function MapPageInner() {
           {/* 顧客情報（マーカー選択時のみ表示） */}
           {selectedCustomer ? (
             <>
+              {/* 代表写真 */}
+              <div className="w-full rounded-xl overflow-hidden border border-gray-200 mb-3 bg-gray-50"
+                style={{ aspectRatio: '4/3', position: 'relative' }}>
+                {selectedCustomer.thumbnailUrl ? (
+                  <img
+                    src={selectedCustomer.thumbnailUrl}
+                    alt={selectedCustomer.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-gray-300">
+                    <span className="material-icons" style={{ fontSize: 36 }}>photo_camera</span>
+                    <span className="text-xs">写真が設定されていません</span>
+                    <span className="text-[10px]">案件詳細の写真タブから設定できます</span>
+                  </div>
+                )}
+              </div>
+
               <h3 className="text-lg font-semibold mb-1">{selectedCustomer.name}</h3>
               <p className="text-sm text-gray-600 mb-2">{selectedCustomer.address ?? '住所未登録'}</p>
               <span
