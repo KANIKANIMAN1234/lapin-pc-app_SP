@@ -15,13 +15,23 @@ L.Icon.Default.mergeOptions({
 });
 
 const STATUS_COLORS: Record<string, string> = {
-  completed:      '#059669',
-  in_progress:    '#2563eb',
-  estimate:       '#d97706',
-  contract:       '#7c3aed',
-  followup_status:'#f97316',
-  inquiry:        '#6b7280',
-  lost:           '#9ca3af',
+  completed:       '#059669',
+  in_progress:     '#2563eb',
+  estimate:        '#d97706',
+  contract:        '#7c3aed',
+  followup_status: '#f97316',
+  inquiry:         '#6b7280',
+  lost:            '#9ca3af',
+};
+
+const STATUS_CHARS: Record<string, string> = {
+  completed:       '完',
+  in_progress:     '施',
+  estimate:        '見',
+  contract:        '受',
+  followup_status: '追',
+  inquiry:         '問',
+  lost:            '失',
 };
 
 export interface MapCustomer {
@@ -35,13 +45,58 @@ export interface MapCustomer {
   assignedTo?: string;
 }
 
-function createCustomIcon(status: string) {
+function createCustomIcon(status: string, name: string) {
   const color = STATUS_COLORS[status] ?? '#6b7280';
+  const char = STATUS_CHARS[status] ?? '?';
+  const displayName = name.length > 8 ? name.slice(0, 8) + '…' : name;
+
+  const html = `
+    <div style="
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: white;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 20px;
+      padding: 4px 8px 4px 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+      white-space: nowrap;
+      cursor: pointer;
+    ">
+      <div style="
+        width: 26px; height: 26px;
+        border-radius: 50%;
+        background: ${color};
+        color: white;
+        font-size: 12px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      ">${char}</div>
+      <span style="font-size: 12px; font-weight: 600; color: #1f2937;">${displayName}</span>
+      <span style="font-size: 13px; color: #9ca3af; line-height: 1;">&#128100;</span>
+    </div>
+    <div style="
+      position: absolute;
+      bottom: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0; height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 6px solid white;
+      filter: drop-shadow(0 2px 1px rgba(0,0,0,0.1));
+    "></div>
+  `;
+
   return L.divIcon({
-    className: 'custom-marker',
-    html: `<div style="width:24px;height:24px;background:${color};border:2px solid white;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3)"></div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
+    className: '',
+    html,
+    iconSize: undefined,
+    iconAnchor: [60, 44],
   });
 }
 
@@ -201,7 +256,7 @@ function MapContent({
         <Marker
           key={customer.id}
           position={[customer.lat, customer.lng]}
-          icon={createCustomIcon(customer.status)}
+          icon={createCustomIcon(customer.status, customer.name)}
           eventHandlers={{ click: () => handleMarkerClick(customer) }}
         >
           <Popup>
