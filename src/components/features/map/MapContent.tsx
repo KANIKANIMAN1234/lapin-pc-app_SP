@@ -20,7 +20,7 @@ const STATUS_COLORS: Record<string, string> = {
   estimate:        '#d97706',
   contract:        '#7c3aed',
   followup_status: '#f97316',
-  inquiry:         '#6b7280',
+  inquiry:         '#eab308',
   lost:            '#9ca3af',
 };
 

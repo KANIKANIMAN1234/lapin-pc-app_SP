@@ -247,7 +247,7 @@ function MapPageInner() {
         <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-amber-500" />見積中</span>
         <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-purple-600" />契約済</span>
         <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-orange-500" />追客中</span>
-        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-gray-400" />問い合わせ</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-yellow-400" />問い合わせ</span>
       </div>
 
       <div className="map-container">
