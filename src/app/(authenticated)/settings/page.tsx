@@ -39,6 +39,12 @@ export default function SettingsPage() {
   const [hrPersonId, setHrPersonId] = useState('');
   const [activeUsers, setActiveUsers] = useState<UserOption[]>([]);
 
+  // 労基法チェック設定
+  const [laborLawEnabled, setLaborLawEnabled] = useState('1');
+  const [laborOvertimeWarn, setLaborOvertimeWarn] = useState('45');
+  const [laborOvertimeAlert, setLaborOvertimeAlert] = useState('80');
+  const [laborOvertimeCritical, setLaborOvertimeCritical] = useState('100');
+
   useEffect(() => {
     (async () => {
       const supabase = createClient();
@@ -64,6 +70,10 @@ export default function SettingsPage() {
           'attendance_standard_daily_hours',
           'attendance_overtime_alert_hours',
           'hr_person_id',
+          'labor_law_check_enabled',
+          'labor_overtime_warn',
+          'labor_overtime_alert',
+          'labor_overtime_critical',
         ]);
       if (settings) {
         settings.forEach((s) => {
@@ -71,6 +81,10 @@ export default function SettingsPage() {
           if (s.key === 'attendance_standard_daily_hours') setStandardDailyHours(s.value);
           if (s.key === 'attendance_overtime_alert_hours') setOvertimeAlertHours(s.value);
           if (s.key === 'hr_person_id') setHrPersonId(s.value);
+          if (s.key === 'labor_law_check_enabled') setLaborLawEnabled(s.value);
+          if (s.key === 'labor_overtime_warn') setLaborOvertimeWarn(s.value);
+          if (s.key === 'labor_overtime_alert') setLaborOvertimeAlert(s.value);
+          if (s.key === 'labor_overtime_critical') setLaborOvertimeCritical(s.value);
         });
       }
 
@@ -119,6 +133,20 @@ export default function SettingsPage() {
     const { error } = await supabase.from('m_settings').upsert(rows, { onConflict: 'key' });
     if (error) showToast('勤怠設定の保存に失敗しました', 'error');
     else showToast('勤怠設定を保存しました');
+  };
+
+  const handleSaveLaborLawSettings = async () => {
+    if (user?.role !== 'admin') return;
+    const supabase = createClient();
+    const rows = [
+      { key: 'labor_law_check_enabled',  value: laborLawEnabled },
+      { key: 'labor_overtime_warn',      value: laborOvertimeWarn },
+      { key: 'labor_overtime_alert',     value: laborOvertimeAlert },
+      { key: 'labor_overtime_critical',  value: laborOvertimeCritical },
+    ];
+    const { error } = await supabase.from('m_settings').upsert(rows, { onConflict: 'key' });
+    if (error) showToast('労基法チェック設定の保存に失敗しました', 'error');
+    else showToast('労基法チェック設定を保存しました');
   };
 
   if (loading) {
@@ -306,6 +334,116 @@ export default function SettingsPage() {
               <button onClick={handleSaveAttendanceSettings} className="btn-primary text-sm">
                 <span className="material-icons text-base">save</span>
                 勤怠設定を保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 労基法チェック設定（admin のみ） */}
+      {user?.role === 'admin' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h3 className="font-bold text-lg mb-1 flex items-center gap-2">
+            <span className="material-icons text-green-600">gavel</span>労基法コンプライアンスチェック
+            <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded ml-1">管理者のみ</span>
+          </h3>
+          <p className="text-xs text-gray-400 mb-5">
+            退勤打刻時に自動で下記の労働基準法チェックを実施し、問題があれば本人・管理者・人事担当者にLINE通知します。
+          </p>
+
+          {/* チェック一覧（説明） */}
+          <div className="bg-gray-50 rounded-lg p-4 mb-5 space-y-2 text-xs text-gray-600">
+            <p className="font-semibold text-gray-700 mb-2">実施するチェック項目（2024年最新 労基法準拠）</p>
+            {[
+              { icon: '🚨', label: '休憩時間不足', desc: '労基法34条：6h超→45分, 8h超→60分の休憩が必要' },
+              { icon: '🌙', label: '深夜退勤', desc: '労基法37条：22:00以降の退勤で25%割増賃金の周知' },
+              { icon: '⚠️', label: '勤務間インターバル不足', desc: '労時設定改善法：退勤〜翌出勤まで11時間未満（努力義務）' },
+              { icon: '🟡', label: '月間残業45時間超', desc: '36協定原則上限：月45時間・年360時間' },
+              { icon: '🔴', label: '月間残業80時間超', desc: '過労死ライン：複数月平均80時間超は産業医面接義務' },
+              { icon: '🚨', label: '月間残業100時間超', desc: '36協定絶対上限：違反で6ヶ月以下の懲役または30万円罰金' },
+              { icon: '⚠️', label: '連続勤務6日以上', desc: '労基法35条：週1日の法定休日確保義務' },
+            ].map((item) => (
+              <div key={item.label} className="flex gap-2">
+                <span className="shrink-0">{item.icon}</span>
+                <div>
+                  <span className="font-medium">{item.label}</span>
+                  <span className="text-gray-500">：{item.desc}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-5">
+            {/* ON/OFF */}
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium text-gray-700">労基法チェック機能</label>
+              <div className="flex gap-3">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio" name="laborEnabled" value="1"
+                    checked={laborLawEnabled === '1'}
+                    onChange={() => setLaborLawEnabled('1')}
+                  />
+                  <span className="text-sm text-green-700 font-medium">有効</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio" name="laborEnabled" value="0"
+                    checked={laborLawEnabled === '0'}
+                    onChange={() => setLaborLawEnabled('0')}
+                  />
+                  <span className="text-sm text-gray-500">無効</span>
+                </label>
+              </div>
+            </div>
+
+            {/* 残業閾値 */}
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-yellow-700 mb-1">🟡 注意アラート（時間/月）</label>
+                <p className="text-[10px] text-gray-400 mb-1">36協定原則上限</p>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number" min="1" max="200"
+                    className="form-input w-20 text-sm"
+                    value={laborOvertimeWarn}
+                    onChange={(e) => setLaborOvertimeWarn(e.target.value)}
+                  />
+                  <span className="text-xs text-gray-500">時間</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-red-600 mb-1">🔴 警告アラート（時間/月）</label>
+                <p className="text-[10px] text-gray-400 mb-1">過労死ライン</p>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number" min="1" max="200"
+                    className="form-input w-20 text-sm"
+                    value={laborOvertimeAlert}
+                    onChange={(e) => setLaborOvertimeAlert(e.target.value)}
+                  />
+                  <span className="text-xs text-gray-500">時間</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-red-800 mb-1">🚨 緊急アラート（時間/月）</label>
+                <p className="text-[10px] text-gray-400 mb-1">絶対上限（法律違反）</p>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number" min="1" max="200"
+                    className="form-input w-20 text-sm"
+                    value={laborOvertimeCritical}
+                    onChange={(e) => setLaborOvertimeCritical(e.target.value)}
+                  />
+                  <span className="text-xs text-gray-500">時間</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button onClick={handleSaveLaborLawSettings} className="btn-primary text-sm">
+                <span className="material-icons text-base">save</span>
+                労基法チェック設定を保存
               </button>
             </div>
           </div>

@@ -283,6 +283,29 @@ export default function AttendancePage() {
           })
           .catch((err) => console.error('[attendance] overtime check error:', err));
       }
+
+      // 全打刻後：労基法コンプライアンスチェック
+      const updated = result.data as AttendanceRow;
+      fetch('/api/labor-law-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.id,
+          date: today,
+          clock_in:    updated.clock_in,
+          clock_out:   updated.clock_out,
+          break_start: updated.break_start,
+          break_end:   updated.break_end,
+          total_work_minutes: updated.total_work_minutes,
+        }),
+      })
+        .then((r) => r.json())
+        .then((json) => {
+          if (json.checks > 0) {
+            showToast(`⚠️ 労基法チェック：${json.checks}件の確認事項があります。管理者へ通知しました。`, 'error');
+          }
+        })
+        .catch((err) => console.error('[attendance] labor-law check error:', err));
     } catch (e) {
       console.error('[Attendance] punch error:', e);
       showToast('記録に失敗しました', 'error');
