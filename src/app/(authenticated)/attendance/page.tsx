@@ -73,7 +73,7 @@ function getLocation(): Promise<{ latitude: number; longitude: number } | null> 
     navigator.geolocation.getCurrentPosition(
       (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
       () => resolve(null),
-      { timeout: 5000 }
+      { timeout: 15000, enableHighAccuracy: true, maximumAge: 0 }
     );
   });
 }
@@ -112,6 +112,7 @@ export default function AttendancePage() {
   const [now, setNow] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [gettingLocation, setGettingLocation] = useState(false);
   const [attendance, setAttendance] = useState<AttendanceRow | null>(null);
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -220,8 +221,15 @@ export default function AttendancePage() {
 
       let locationUrl: string | null = null;
       if (type === 'clock_in' || type === 'clock_out') {
+        setGettingLocation(true);
         const loc = await getLocation();
+        setGettingLocation(false);
         locationUrl = buildLocationUrl(loc);
+        if (locationUrl) {
+          showToast(`位置情報を取得しました`, 'success');
+        } else {
+          showToast('位置情報を取得できませんでした（ブラウザの許可を確認してください）', 'error');
+        }
       }
 
       const updates: Record<string, unknown> = {
@@ -250,7 +258,7 @@ export default function AttendancePage() {
 
       if (result.error) throw result.error;
 
-      showToast(`${LOG_CONFIG[type].label}を記録しました (${time})`, 'success');
+      showToast(`${LOG_CONFIG[type].label}を記録しました（${time}）`, 'success');
       setAttendance(result.data);
       setLogs(deriveLogs(result.data));
       fetchList(); // 一覧を即時更新
@@ -334,6 +342,14 @@ export default function AttendancePage() {
             <span className={`w-2 h-2 rounded-full ${statusStyle.dot}`} />
             {statusText}
           </span>
+
+          {/* 位置情報取得中インジケーター */}
+          {gettingLocation && (
+            <div className="mt-3 flex items-center justify-center gap-2 text-xs text-blue-600">
+              <span className="inline-block w-3.5 h-3.5 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin" />
+              位置情報を取得中...
+            </div>
+          )}
         </div>
 
         {/* ボタングリッド */}
@@ -380,6 +396,9 @@ export default function AttendancePage() {
           <div className="flex flex-col gap-1">
             {logs.map((log, i) => {
               const cfg = LOG_CONFIG[log.type];
+              const locUrl =
+                log.type === 'clock_in'  ? attendance?.clock_in_location :
+                log.type === 'clock_out' ? attendance?.clock_out_location : null;
               return (
                 <div
                   key={i}
@@ -388,28 +407,22 @@ export default function AttendancePage() {
                   <span className={`material-icons text-lg ${cfg.color}`}>{cfg.icon}</span>
                   <span className="font-bold text-gray-800">{log.time}</span>
                   <span className={`text-sm font-medium ${cfg.color}`}>{log.label}</span>
+                  {locUrl ? (
+                    <a href={locUrl} target="_blank" rel="noopener noreferrer"
+                      title="地図で確認"
+                      className={`ml-auto flex items-center gap-0.5 text-xs font-medium ${cfg.color} hover:underline`}>
+                      <span className="material-icons" style={{ fontSize: 14 }}>location_on</span>
+                      位置
+                    </a>
+                  ) : (log.type === 'clock_in' || log.type === 'clock_out') ? (
+                    <span className="ml-auto text-xs text-gray-300 flex items-center gap-0.5">
+                      <span className="material-icons" style={{ fontSize: 14 }}>location_off</span>
+                    </span>
+                  ) : null}
                 </div>
               );
             })}
           </div>
-
-          {/* 位置情報リンク */}
-          {(attendance?.clock_in_location || attendance?.clock_out_location) && (
-            <div className="mt-4 flex gap-3 text-sm">
-              {attendance.clock_in_location && (
-                <a href={attendance.clock_in_location} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-green-600 hover:underline">
-                  <span className="material-icons text-sm">location_on</span>出勤時の位置
-                </a>
-              )}
-              {attendance.clock_out_location && (
-                <a href={attendance.clock_out_location} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-red-600 hover:underline">
-                  <span className="material-icons text-sm">location_on</span>退勤時の位置
-                </a>
-              )}
-            </div>
-          )}
         </div>
       )}
 
