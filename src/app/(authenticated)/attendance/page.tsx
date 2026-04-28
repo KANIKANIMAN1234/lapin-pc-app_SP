@@ -317,8 +317,9 @@ export default function AttendancePage() {
       {/* 2カラムレイアウト */}
       <div className="flex gap-6 items-start flex-wrap lg:flex-nowrap">
 
-      {/* 左：打刻カード */}
-      <div className="bg-white rounded-2xl shadow-sm p-6 mb-6 w-full lg:w-80 shrink-0">
+      {/* 左：打刻カード＋打刻履歴 */}
+      <div className="flex flex-col gap-6 w-full lg:w-80 shrink-0">
+      <div className="bg-white rounded-2xl shadow-sm p-6">
         <div className="text-center mb-6">
           <p className="text-gray-500 text-sm mb-1">{formatDate(now)}</p>
           <p
@@ -367,10 +368,7 @@ export default function AttendancePage() {
             </p>
           </div>
         )}
-      </div>{/* /左カラム */}
-
-      {/* 右カラム：打刻履歴＋月間一覧 */}
-      <div className="flex-1 min-w-0 flex flex-col gap-6">
+      </div>{/* /打刻カード */}
 
       {/* 打刻履歴 */}
       {logs.length > 0 && (
@@ -414,6 +412,11 @@ export default function AttendancePage() {
           )}
         </div>
       )}
+
+      </div>{/* /左カラム */}
+
+      {/* 右カラム：月間一覧 */}
+      <div className="flex-1 min-w-0 flex flex-col gap-6">
 
       {/* ── 月間勤怠一覧 ── */}
       <div className="bg-white rounded-2xl shadow-sm p-6">
