@@ -6,6 +6,11 @@ import { useAuthStore } from '@/stores/authStore';
 
 const DAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
+interface UserOption {
+  id: string;
+  name: string;
+}
+
 type AttendanceStatus = 'none' | 'working' | 'break' | 'left';
 type AttendanceType = 'clock_in' | 'break_start' | 'break_end' | 'clock_out';
 
@@ -95,14 +100,30 @@ function deriveLogs(att: AttendanceRow): AttendanceLog[] {
   return logs.reverse();
 }
 
+function fmtMin(min: number | null | undefined): string {
+  if (min == null) return '-';
+  return `${Math.floor(min / 60)}h${min % 60 > 0 ? `${min % 60}m` : ''}`;
+}
+
 export default function AttendancePage() {
   const { user } = useAuthStore();
+  const isAdmin = user?.role === 'admin';
+
   const [now, setNow] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [attendance, setAttendance] = useState<AttendanceRow | null>(null);
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+
+  // 月間一覧
+  const today = new Date();
+  const [listYear, setListYear]   = useState(today.getFullYear());
+  const [listMonth, setListMonth] = useState(today.getMonth() + 1);
+  const [listRows, setListRows]   = useState<AttendanceRow[]>([]);
+  const [listLoading, setListLoading] = useState(false);
+  const [users, setUsers]       = useState<UserOption[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
 
   const status = deriveStatus(attendance);
 
@@ -135,6 +156,59 @@ export default function AttendancePage() {
   useEffect(() => {
     fetchToday();
   }, [fetchToday]);
+
+  // 管理者の場合はユーザー一覧を取得
+  useEffect(() => {
+    if (!isAdmin) return;
+    const supabase = createClient();
+    supabase
+      .from('m_users')
+      .select('id, name')
+      .eq('status', 'active')
+      .order('name')
+      .then(({ data }) => {
+        if (data) setUsers(data as UserOption[]);
+      });
+  }, [isAdmin]);
+
+  // selectedUserId の初期値を自分自身に設定
+  useEffect(() => {
+    if (user?.id && !selectedUserId) setSelectedUserId(String(user.id));
+  }, [user?.id, selectedUserId]);
+
+  // 月間勤怠一覧を取得
+  const fetchList = useCallback(async () => {
+    const targetId = selectedUserId || (user?.id ? String(user.id) : '');
+    if (!targetId) return;
+    setListLoading(true);
+    const supabase = createClient();
+    const from = `${listYear}-${String(listMonth).padStart(2, '0')}-01`;
+    const lastDay = new Date(listYear, listMonth, 0).getDate();
+    const to   = `${listYear}-${String(listMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const { data, error } = await supabase
+      .from('t_attendance')
+      .select('*')
+      .eq('user_id', targetId)
+      .gte('date', from)
+      .lte('date', to)
+      .order('date', { ascending: false });
+    if (error) console.error('[Attendance] list fetch error:', error);
+    setListRows(data ?? []);
+    setListLoading(false);
+  }, [listYear, listMonth, selectedUserId, user?.id]);
+
+  useEffect(() => {
+    fetchList();
+  }, [fetchList]);
+
+  const prevMonth = () => {
+    if (listMonth === 1) { setListYear((y) => y - 1); setListMonth(12); }
+    else setListMonth((m) => m - 1);
+  };
+  const nextMonth = () => {
+    if (listMonth === 12) { setListYear((y) => y + 1); setListMonth(1); }
+    else setListMonth((m) => m + 1);
+  };
 
   const punch = async (type: AttendanceType) => {
     if (!user) { showToast('ユーザー情報がありません', 'error'); return; }
@@ -179,6 +253,7 @@ export default function AttendancePage() {
       showToast(`${LOG_CONFIG[type].label}を記録しました (${time})`, 'success');
       setAttendance(result.data);
       setLogs(deriveLogs(result.data));
+      fetchList(); // 一覧を即時更新
     } catch (e) {
       console.error('[Attendance] punch error:', e);
       showToast('記録に失敗しました', 'error');
@@ -333,6 +408,149 @@ export default function AttendancePage() {
           )}
         </div>
       )}
+
+      {/* ── 月間勤怠一覧 ── */}
+      <div className="bg-white rounded-2xl shadow-sm p-6 mt-6">
+        {/* ヘッダー行 */}
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <h2 className="text-base font-bold text-gray-800 flex items-center gap-2">
+            <span className="material-icons text-green-600 text-xl">calendar_month</span>
+            月間勤怠一覧
+          </h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* 管理者: ユーザー切替 */}
+            {isAdmin && users.length > 0 && (
+              <select
+                value={selectedUserId}
+                onChange={(e) => setSelectedUserId(e.target.value)}
+                className="text-sm border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-green-400"
+              >
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+            )}
+            {/* 月送りナビ */}
+            <div className="flex items-center gap-1">
+              <button onClick={prevMonth}
+                className="p-1 rounded hover:bg-gray-100 text-gray-600">
+                <span className="material-icons" style={{ fontSize: 20 }}>chevron_left</span>
+              </button>
+              <span className="text-sm font-semibold text-gray-700 w-24 text-center">
+                {listYear}年{listMonth}月
+              </span>
+              <button onClick={nextMonth}
+                className="p-1 rounded hover:bg-gray-100 text-gray-600">
+                <span className="material-icons" style={{ fontSize: 20 }}>chevron_right</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {listLoading ? (
+          <div className="text-center py-8">
+            <div className="inline-block w-6 h-6 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin" />
+          </div>
+        ) : listRows.length === 0 ? (
+          <div className="text-center py-10 text-gray-400">
+            <span className="material-icons text-4xl mb-2 block" style={{ color: '#d1d5db' }}>event_busy</span>
+            <p className="text-sm">この月の勤怠記録がありません</p>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 text-gray-600 text-xs">
+                    <th className="px-3 py-2.5 text-left font-medium rounded-l-lg">日付</th>
+                    <th className="px-3 py-2.5 text-center font-medium">出勤</th>
+                    <th className="px-3 py-2.5 text-center font-medium">休憩</th>
+                    <th className="px-3 py-2.5 text-center font-medium">退勤</th>
+                    <th className="px-3 py-2.5 text-center font-medium">実労働時間</th>
+                    <th className="px-3 py-2.5 text-center font-medium rounded-r-lg">位置</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {listRows.map((row) => {
+                    const d = new Date(row.date + 'T00:00:00');
+                    const dayIdx = d.getDay();
+                    const dayColor = dayIdx === 0 ? 'text-red-500' : dayIdx === 6 ? 'text-blue-500' : 'text-gray-700';
+                    const isToday = row.date === todayDateStr();
+                    return (
+                      <tr key={row.id}
+                        className={`border-t border-gray-100 hover:bg-gray-50 transition-colors
+                          ${isToday ? 'bg-green-50' : ''}`}>
+                        <td className="px-3 py-3">
+                          <span className={`font-medium text-sm ${dayColor}`}>
+                            {row.date.slice(5).replace('-', '/')}
+                            <span className="ml-1 text-xs">({DAYS[dayIdx]})</span>
+                          </span>
+                          {isToday && (
+                            <span className="ml-1.5 text-[10px] bg-green-500 text-white rounded-full px-1.5 py-0.5">今日</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <span className="font-mono text-green-700 font-semibold">
+                            {row.clock_in ? row.clock_in.slice(0, 5) : '-'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-center text-xs text-gray-500">
+                          {row.break_start
+                            ? `${row.break_start.slice(0, 5)}〜${row.break_end ? row.break_end.slice(0, 5) : '?'}`
+                            : '-'}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <span className="font-mono text-red-600 font-semibold">
+                            {row.clock_out ? row.clock_out.slice(0, 5) : (row.clock_in ? '勤務中' : '-')}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <span className={`font-semibold ${row.total_work_minutes != null ? 'text-gray-800' : 'text-gray-400'}`}>
+                            {fmtMin(row.total_work_minutes)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {row.clock_in_location && (
+                              <a href={row.clock_in_location} target="_blank" rel="noopener noreferrer"
+                                title="出勤時の位置"
+                                className="text-green-500 hover:text-green-700">
+                                <span className="material-icons" style={{ fontSize: 16 }}>login</span>
+                              </a>
+                            )}
+                            {row.clock_out_location && (
+                              <a href={row.clock_out_location} target="_blank" rel="noopener noreferrer"
+                                title="退勤時の位置"
+                                className="text-red-400 hover:text-red-600">
+                                <span className="material-icons" style={{ fontSize: 16 }}>logout</span>
+                              </a>
+                            )}
+                            {!row.clock_in_location && !row.clock_out_location && (
+                              <span className="text-gray-300 text-xs">-</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                {/* 合計行 */}
+                <tfoot>
+                  <tr className="border-t-2 border-gray-200 bg-gray-50">
+                    <td colSpan={4} className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 rounded-bl-lg">
+                      {listRows.length}日 合計
+                    </td>
+                    <td className="px-3 py-2.5 text-center font-bold text-gray-800">
+                      {fmtMin(listRows.reduce((s, r) => s + (r.total_work_minutes ?? 0), 0))}
+                    </td>
+                    <td className="rounded-br-lg" />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
