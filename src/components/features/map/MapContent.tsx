@@ -213,6 +213,8 @@ function MapContent({
               <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>{customer.lastWork}</p>
               <a
                 href={`/projects/${customer.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
                 style={{
                   display: 'block',
                   textAlign: 'center',

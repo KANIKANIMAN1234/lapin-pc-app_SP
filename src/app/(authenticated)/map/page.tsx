@@ -285,6 +285,8 @@ function MapPageInner() {
               <Link
                 href={`/projects/${selectedCustomer.id}`}
                 className="btn-primary mt-4 w-full justify-center"
+                target="_blank"
+                rel="noopener noreferrer"
               >
                 <span className="material-icons text-base">open_in_new</span>
                 案件詳細を見る
