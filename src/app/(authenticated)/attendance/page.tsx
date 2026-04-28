@@ -300,7 +300,7 @@ export default function AttendancePage() {
   ];
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div>
       {/* トースト */}
       {toast && (
         <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium
@@ -314,8 +314,11 @@ export default function AttendancePage() {
         出退勤
       </h1>
 
-      {/* 打刻カード */}
-      <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
+      {/* 2カラムレイアウト */}
+      <div className="flex gap-6 items-start flex-wrap lg:flex-nowrap">
+
+      {/* 左：打刻カード */}
+      <div className="bg-white rounded-2xl shadow-sm p-6 mb-6 w-full lg:w-80 shrink-0">
         <div className="text-center mb-6">
           <p className="text-gray-500 text-sm mb-1">{formatDate(now)}</p>
           <p
@@ -364,7 +367,10 @@ export default function AttendancePage() {
             </p>
           </div>
         )}
-      </div>
+      </div>{/* /左カラム */}
+
+      {/* 右カラム：打刻履歴＋月間一覧 */}
+      <div className="flex-1 min-w-0 flex flex-col gap-6">
 
       {/* 打刻履歴 */}
       {logs.length > 0 && (
@@ -410,7 +416,7 @@ export default function AttendancePage() {
       )}
 
       {/* ── 月間勤怠一覧 ── */}
-      <div className="bg-white rounded-2xl shadow-sm p-6 mt-6">
+      <div className="bg-white rounded-2xl shadow-sm p-6">
         {/* ヘッダー行 */}
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <h2 className="text-base font-bold text-gray-800 flex items-center gap-2">
@@ -550,7 +556,10 @@ export default function AttendancePage() {
             </div>
           </>
         )}
-      </div>
+      </div>{/* /月間勤怠一覧 */}
+
+      </div>{/* /右カラム */}
+      </div>{/* /2カラムレイアウト */}
     </div>
   );
 }
