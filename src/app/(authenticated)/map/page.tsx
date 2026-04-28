@@ -113,11 +113,31 @@ function MapPageInner() {
   const [geocoding, setGeocoding] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [posToast, setPosToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null | undefined>(undefined);
 
   const showPosToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setPosToast({ msg, type });
     setTimeout(() => setPosToast(null), 3000);
   };
+
+  // マーカー選択時にサムネイルURLを個別取得（SQL追加後に有効化）
+  useEffect(() => {
+    if (!selectedCustomer) {
+      setThumbnailUrl(undefined);
+      return;
+    }
+    setThumbnailUrl(undefined);
+    const supabase = createClient();
+    supabase
+      .from('t_projects')
+      .select('map_thumbnail_url')
+      .eq('id', selectedCustomer.id)
+      .single()
+      .then(({ data }) => {
+        setThumbnailUrl(data?.map_thumbnail_url ?? null);
+      })
+      .catch(() => setThumbnailUrl(null));
+  }, [selectedCustomer?.id]);
 
   const isSales = user?.role === 'sales';
 
@@ -333,9 +353,13 @@ function MapPageInner() {
               {/* 代表写真 */}
               <div className="w-full rounded-xl overflow-hidden border border-gray-200 mb-3 bg-gray-50"
                 style={{ aspectRatio: '4/3', position: 'relative' }}>
-                {selectedCustomer.thumbnailUrl ? (
+                {thumbnailUrl === undefined ? (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <span className="inline-block w-5 h-5 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin" />
+                  </div>
+                ) : thumbnailUrl ? (
                   <img
-                    src={selectedCustomer.thumbnailUrl}
+                    src={thumbnailUrl}
                     alt={selectedCustomer.name}
                     className="w-full h-full object-cover"
                   />

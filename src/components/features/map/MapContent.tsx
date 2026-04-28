@@ -168,7 +168,7 @@ function MapContent({
     geocodingRef.current = true;
 
     const supabase = createClient();
-    const SELECT = 'id, customer_name, lat, lng, status, work_type, inquiry_date, address, assigned_to, map_thumbnail_url';
+    const SELECT = 'id, customer_name, lat, lng, status, work_type, inquiry_date, address, assigned_to';
 
     (async () => {
       // ① 座標あり → 即表示
@@ -353,7 +353,6 @@ function toMapCustomer(p: {
   inquiry_date: string | null;
   address: string | null;
   assigned_to: string | number | null;
-  map_thumbnail_url?: string | null;
 }): MapCustomer {
   return {
     id: String(p.id),
@@ -366,7 +365,6 @@ function toMapCustomer(p: {
     }`,
     address: p.address ?? undefined,
     assignedTo: p.assigned_to ? String(p.assigned_to) : undefined,
-    thumbnailUrl: p.map_thumbnail_url ?? undefined,
   };
 }
 
