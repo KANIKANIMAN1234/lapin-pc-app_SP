@@ -199,7 +199,8 @@ function MapPageInner() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+      {/* タイトル行 */}
+      <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <h2 className="text-xl font-bold">OB顧客マップ</h2>
           {geocodingRemaining > 0 && (
@@ -236,6 +237,17 @@ function MapPageInner() {
             エリア設定
           </button>
         </div>
+      </div>
+
+      {/* 凡例バー（マップ上部・横並び） */}
+      <div className="flex items-center gap-4 px-4 py-2 mb-3 bg-white rounded-xl shadow-sm text-xs text-gray-700 flex-wrap">
+        <span className="font-semibold text-gray-500">マーカー色の凡例:</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-green-600" />完工</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-blue-600" />施工中</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-amber-500" />見積中</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-purple-600" />契約済</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-orange-500" />追客中</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-gray-400" />問い合わせ</span>
       </div>
 
       <div className="map-container">
@@ -298,18 +310,6 @@ function MapPageInner() {
             <p className="text-gray-500 text-sm mt-2 mb-4">マップ上のマーカーをクリックして顧客情報を表示</p>
           )}
 
-          {/* 凡例（常時表示） */}
-          <div className="text-xs">
-            <p className="font-medium text-gray-700 mb-2">マーカー色の凡例:</p>
-            <ul className="space-y-1.5">
-              <li><span className="inline-block w-3 h-3 rounded-full bg-green-600 mr-1.5 align-middle" />完工</li>
-              <li><span className="inline-block w-3 h-3 rounded-full bg-blue-600 mr-1.5 align-middle" />施工中</li>
-              <li><span className="inline-block w-3 h-3 rounded-full bg-amber-500 mr-1.5 align-middle" />見積中</li>
-              <li><span className="inline-block w-3 h-3 rounded-full bg-purple-600 mr-1.5 align-middle" />契約済</li>
-              <li><span className="inline-block w-3 h-3 rounded-full bg-orange-500 mr-1.5 align-middle" />追客中</li>
-              <li><span className="inline-block w-3 h-3 rounded-full bg-gray-400 mr-1.5 align-middle" />問い合わせ</li>
-            </ul>
-          </div>
         </div>
       </div>
 
