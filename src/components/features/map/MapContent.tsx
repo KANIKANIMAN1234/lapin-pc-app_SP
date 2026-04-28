@@ -98,59 +98,71 @@ function MapContent({
     geocodingRef.current = true;
 
     const supabase = createClient();
+    const SELECT = 'id, customer_name, lat, lng, status, work_type, inquiry_date, address, assigned_to';
 
-    supabase
-      .from('t_projects')
-      .select('id, customer_name, lat, lng, status, work_type, inquiry_date, address, assigned_to')
-      .is('deleted_at', null)
-      .not('address', 'is', null)
-      .limit(500)
-      .then(async ({ data: projects, error }) => {
-        if (error) { console.error('t_projects fetch error:', error); return; }
-        if (!projects) return;
+    (async () => {
+      // ① 座標あり → 即表示（サーバー側で lat/lng NOT NULL を条件にする）
+      const { data: withCoords, error: e1 } = await supabase
+        .from('t_projects')
+        .select(SELECT)
+        .is('deleted_at', null)
+        .not('lat', 'is', null)
+        .not('lng', 'is', null)
+        .limit(500);
 
-        // 座標あり → 即表示
-        const withCoords: MapCustomer[] = [];
-        const toGeocode: typeof projects = [];
+      if (e1) console.error('[Map] fetch withCoords error:', e1);
+      const mapped = (withCoords ?? []).map(toMapCustomer);
+      setCustomers(mapped);
 
-        for (const p of projects) {
-          if (p.lat != null && p.lng != null) {
-            withCoords.push(toMapCustomer(p));
-          } else if (p.address && String(p.address).length > 3) {
-            toGeocode.push(p);
-          }
-        }
-        setCustomers(withCoords);
-
-        // 座標なし → 住所からジオコード（1件/秒 のレート制限）
-        if (toGeocode.length > 0) {
-          onGeocodingProgress?.(toGeocode.length);
-          let remaining = toGeocode.length;
-
-          for (const p of toGeocode) {
-            await new Promise((r) => setTimeout(r, 1100));
-            const coords = await geocodeAddress(p.address as string);
-            remaining -= 1;
-            onGeocodingProgress?.(remaining);
-
-            if (coords) {
-              const [lat, lng] = coords;
-              // Supabase に保存（以降リロード時は即表示される）
-              await supabase.from('t_projects').update({ lat, lng }).eq('id', p.id);
-              const customer = toMapCustomer({ ...p, lat, lng });
-              setCustomers((prev) => [...prev, customer]);
-            }
-          }
-        }
-
-        // フォーカス対象の処理
-        if (focusProjectId && !focusHandled && onFocusResolved) {
+      // フォーカス対象の処理（座標ありの中から）
+      if (focusProjectId && !focusHandled && onFocusResolved) {
+        const target = mapped.find((c) => c.id === focusProjectId);
+        if (target) {
+          onFocusResolved(target, [target.lat, target.lng]);
           setFocusHandled(true);
-          const allCustomers = [...withCoords];
-          const target = allCustomers.find((c) => c.id === focusProjectId);
-          if (target) onFocusResolved(target, [target.lat, target.lng]);
         }
-      });
+      }
+
+      // ② 座標なし・住所あり → ジオコードが必要な案件のみ取得
+      const { data: needGeocode, error: e2 } = await supabase
+        .from('t_projects')
+        .select(SELECT)
+        .is('deleted_at', null)
+        .is('lat', null)
+        .not('address', 'is', null)
+        .limit(200);
+
+      if (e2) console.error('[Map] fetch needGeocode error:', e2);
+      const toGeocode = (needGeocode ?? []).filter(
+        (p) => p.address && String(p.address).trim().length > 3
+      );
+
+      if (toGeocode.length === 0) return;
+
+      onGeocodingProgress?.(toGeocode.length);
+      let remaining = toGeocode.length;
+
+      for (const p of toGeocode) {
+        await new Promise((r) => setTimeout(r, 1100)); // Nominatim: 1req/sec
+        const coords = await geocodeAddress(p.address as string);
+        remaining -= 1;
+        onGeocodingProgress?.(remaining);
+
+        if (coords) {
+          const [lat, lng] = coords;
+          const { error: updateErr } = await supabase
+            .from('t_projects')
+            .update({ lat, lng })
+            .eq('id', p.id);
+
+          if (updateErr) {
+            console.error('[Map] lat/lng save error:', updateErr);
+          } else {
+            setCustomers((prev) => [...prev, toMapCustomer({ ...p, lat, lng })]);
+          }
+        }
+      }
+    })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
