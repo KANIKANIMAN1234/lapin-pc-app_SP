@@ -101,6 +101,7 @@ function MapPageInner() {
   }, []);
   const [showAreaModal, setShowAreaModal] = useState(false);
   const [focusCenter, setFocusCenter] = useState<[number, number] | null>(null);
+  const [geocodingRemaining, setGeocodingRemaining] = useState(0);
 
   const [areaType, setAreaType] = useState<'company' | 'custom'>('company');
   const [customAddress, setCustomAddress] = useState('');
@@ -199,8 +200,16 @@ function MapPageInner() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-        <h2 className="text-xl font-bold">OB顧客マップ</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl font-bold">OB顧客マップ</h2>
+          {geocodingRemaining > 0 && (
+            <span className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
+              <span className="inline-block w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+              住所から位置を取得中… 残り{geocodingRemaining}件
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
           <input
             type="search"
             placeholder="顧客名・住所で検索..."
@@ -242,6 +251,7 @@ function MapPageInner() {
               setSelectedCustomer(customer);
               setFocusCenter(coords);
             }}
+            onGeocodingProgress={setGeocodingRemaining}
           />
         </div>
 
@@ -273,9 +283,10 @@ function MapPageInner() {
                 <p className="text-sm text-gray-600">{selectedCustomer.lastWork}</p>
               </div>
               <Link
-                href={`/projects?customer=${selectedCustomer.id}`}
+                href={`/projects/${selectedCustomer.id}`}
                 className="btn-primary mt-4 w-full justify-center"
               >
+                <span className="material-icons text-base">open_in_new</span>
                 案件詳細を見る
               </Link>
             </>

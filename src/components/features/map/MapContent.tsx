@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -15,11 +15,13 @@ L.Icon.Default.mergeOptions({
 });
 
 const STATUS_COLORS: Record<string, string> = {
-  completed: '#059669',
-  in_progress: '#2563eb',
-  estimate: '#d97706',
-  contract: '#7c3aed',
-  inquiry: '#6b7280',
+  completed:      '#059669',
+  in_progress:    '#2563eb',
+  estimate:       '#d97706',
+  contract:       '#7c3aed',
+  followup_status:'#f97316',
+  inquiry:        '#6b7280',
+  lost:           '#9ca3af',
 };
 
 export interface MapCustomer {
@@ -51,6 +53,20 @@ function MapCenterUpdater({ center }: { center: [number, number] }) {
   return null;
 }
 
+async function geocodeAddress(address: string): Promise<[number, number] | null> {
+  try {
+    const resp = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
+      { headers: { 'User-Agent': 'lapin-reform-app/1.0' } }
+    );
+    const results = await resp.json();
+    if (results.length > 0) return [Number(results[0].lat), Number(results[0].lon)];
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 interface MapContentProps {
   selectedCustomer: MapCustomer | null;
   onSelectCustomer: (customer: MapCustomer | null) => void;
@@ -59,6 +75,8 @@ interface MapContentProps {
   currentUserId?: string;
   focusProjectId?: string;
   onFocusResolved?: (customer: MapCustomer, coords: [number, number]) => void;
+  geocodingCount?: number;
+  onGeocodingProgress?: (remaining: number) => void;
 }
 
 function MapContent({
@@ -69,84 +87,72 @@ function MapContent({
   currentUserId,
   focusProjectId,
   onFocusResolved,
+  onGeocodingProgress,
 }: MapContentProps) {
   const [customers, setCustomers] = useState<MapCustomer[]>([]);
   const [focusHandled, setFocusHandled] = useState(false);
+  const geocodingRef = useRef(false);
 
   useEffect(() => {
+    if (geocodingRef.current) return;
+    geocodingRef.current = true;
+
     const supabase = createClient();
 
     supabase
       .from('t_projects')
       .select('id, customer_name, lat, lng, status, work_type, inquiry_date, address, assigned_to')
-      .not('lat', 'is', null)
-      .not('lng', 'is', null)
       .is('deleted_at', null)
+      .not('address', 'is', null)
       .limit(500)
       .then(async ({ data: projects, error }) => {
-        if (error) {
-          console.error('t_projects fetch error:', error);
-          return;
-        }
+        if (error) { console.error('t_projects fetch error:', error); return; }
         if (!projects) return;
 
-        const mapped: MapCustomer[] = projects.map((p) => ({
-          id: String(p.id),
-          name: p.customer_name,
-          lat: Number(p.lat),
-          lng: Number(p.lng),
-          status: p.status,
-          lastWork: `${String(p.inquiry_date ?? '').substring(0, 7)} ${Array.isArray(p.work_type) ? p.work_type.join(',') : (p.work_type ?? '')}`,
-          address: p.address,
-          assignedTo: p.assigned_to ? String(p.assigned_to) : undefined,
-        }));
-        setCustomers(mapped);
+        // 座標あり → 即表示
+        const withCoords: MapCustomer[] = [];
+        const toGeocode: typeof projects = [];
+
+        for (const p of projects) {
+          if (p.lat != null && p.lng != null) {
+            withCoords.push(toMapCustomer(p));
+          } else if (p.address && String(p.address).length > 3) {
+            toGeocode.push(p);
+          }
+        }
+        setCustomers(withCoords);
+
+        // 座標なし → 住所からジオコード（1件/秒 のレート制限）
+        if (toGeocode.length > 0) {
+          onGeocodingProgress?.(toGeocode.length);
+          let remaining = toGeocode.length;
+
+          for (const p of toGeocode) {
+            await new Promise((r) => setTimeout(r, 1100));
+            const coords = await geocodeAddress(p.address as string);
+            remaining -= 1;
+            onGeocodingProgress?.(remaining);
+
+            if (coords) {
+              const [lat, lng] = coords;
+              // Supabase に保存（以降リロード時は即表示される）
+              await supabase.from('t_projects').update({ lat, lng }).eq('id', p.id);
+              const customer = toMapCustomer({ ...p, lat, lng });
+              setCustomers((prev) => [...prev, customer]);
+            }
+          }
+        }
 
         // フォーカス対象の処理
         if (focusProjectId && !focusHandled && onFocusResolved) {
-          let target = mapped.find((c) => c.id === focusProjectId);
-
-          if (target) {
-            onFocusResolved(target, [target.lat, target.lng]);
-            setFocusHandled(true);
-          } else {
-            // lat/lng 未登録案件を住所でジオコード
-            const { data: proj } = await supabase
-              .from('t_projects')
-              .select('id, customer_name, address, status, work_type')
-              .eq('id', focusProjectId)
-              .single();
-
-            if (proj?.address) {
-              try {
-                const resp = await fetch(
-                  `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(proj.address)}&limit=1`
-                );
-                const results = await resp.json();
-                if (results.length > 0) {
-                  const lat = Number(results[0].lat);
-                  const lng = Number(results[0].lon);
-                  target = {
-                    id: String(proj.id),
-                    name: proj.customer_name,
-                    lat,
-                    lng,
-                    status: proj.status,
-                    lastWork: Array.isArray(proj.work_type) ? proj.work_type.join(',') : (proj.work_type ?? ''),
-                    address: proj.address,
-                  };
-                  setCustomers((prev) => [...prev, target!]);
-                  onFocusResolved(target, [lat, lng]);
-                }
-              } catch {
-                // geocode 失敗は無視
-              }
-            }
-            setFocusHandled(true);
-          }
+          setFocusHandled(true);
+          const allCustomers = [...withCoords];
+          const target = allCustomers.find((c) => c.id === focusProjectId);
+          if (target) onFocusResolved(target, [target.lat, target.lng]);
         }
       });
-  }, [focusProjectId, focusHandled, onFocusResolved]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleMarkerClick = useCallback(
     (customer: MapCustomer) => {
@@ -168,7 +174,7 @@ function MapContent({
   return (
     <MapContainer
       center={mapCenter}
-      zoom={12}
+      zoom={13}
       style={{ height: '100%', width: '100%' }}
       scrollWheelZoom
     >
@@ -185,15 +191,59 @@ function MapContent({
           eventHandlers={{ click: () => handleMarkerClick(customer) }}
         >
           <Popup>
-            <div className="text-sm">
-              <div className="font-bold">{customer.name}</div>
-              <div className="text-gray-600 mt-1">{customer.lastWork}</div>
+            <div style={{ minWidth: 160 }}>
+              <p style={{ fontWeight: 700, marginBottom: 4 }}>{customer.name}</p>
+              {customer.address && (
+                <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{customer.address}</p>
+              )}
+              <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>{customer.lastWork}</p>
+              <a
+                href={`/projects/${customer.id}`}
+                style={{
+                  display: 'block',
+                  textAlign: 'center',
+                  padding: '4px 12px',
+                  background: '#06C755',
+                  color: 'white',
+                  borderRadius: 6,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                }}
+              >
+                詳細を見る →
+              </a>
             </div>
           </Popup>
         </Marker>
       ))}
     </MapContainer>
   );
+}
+
+function toMapCustomer(p: {
+  id: string | number;
+  customer_name: string;
+  lat: number | null;
+  lng: number | null;
+  status: string;
+  work_type: string[] | string | null;
+  inquiry_date: string | null;
+  address: string | null;
+  assigned_to: string | number | null;
+}): MapCustomer {
+  return {
+    id: String(p.id),
+    name: p.customer_name,
+    lat: Number(p.lat),
+    lng: Number(p.lng),
+    status: p.status,
+    lastWork: `${String(p.inquiry_date ?? '').substring(0, 7)} ${
+      Array.isArray(p.work_type) ? p.work_type.join(',') : (p.work_type ?? '')
+    }`,
+    address: p.address ?? undefined,
+    assignedTo: p.assigned_to ? String(p.assigned_to) : undefined,
+  };
 }
 
 export default MapContent;
