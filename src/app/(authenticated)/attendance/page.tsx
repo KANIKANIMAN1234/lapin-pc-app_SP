@@ -261,7 +261,28 @@ export default function AttendancePage() {
       showToast(`${LOG_CONFIG[type].label}を記録しました（${time}）`, 'success');
       setAttendance(result.data);
       setLogs(deriveLogs(result.data));
-      fetchList(); // 一覧を即時更新
+      fetchList();
+
+      // 退勤時：月間残業アラートチェック
+      if (type === 'clock_out') {
+        const now2 = new Date();
+        fetch('/api/attendance-overtime-check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: user.id,
+            year: now2.getFullYear(),
+            month: now2.getMonth() + 1,
+          }),
+        })
+          .then((r) => r.json())
+          .then((json) => {
+            if (json.alerted) {
+              showToast(`⚠️ 今月の残業時間が規定を超えました。本人・管理者へLINE通知しました。`, 'error');
+            }
+          })
+          .catch((err) => console.error('[attendance] overtime check error:', err));
+      }
     } catch (e) {
       console.error('[Attendance] punch error:', e);
       showToast('記録に失敗しました', 'error');

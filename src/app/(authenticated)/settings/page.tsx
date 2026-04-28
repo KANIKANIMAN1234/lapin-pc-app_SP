@@ -12,6 +12,8 @@ function Toast({ msg, type }: { msg: string; type: 'success' | 'error' }) {
   );
 }
 
+interface UserOption { id: string; name: string; }
+
 export default function SettingsPage() {
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(true);
@@ -30,6 +32,12 @@ export default function SettingsPage() {
 
   // 通知設定（m_settings から取得）
   const [bonusAlertRate, setBonusAlertRate] = useState('20');
+
+  // 勤怠設定
+  const [standardDailyHours, setStandardDailyHours] = useState('7');
+  const [overtimeAlertHours, setOvertimeAlertHours] = useState('30');
+  const [hrPersonId, setHrPersonId] = useState('');
+  const [activeUsers, setActiveUsers] = useState<UserOption[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -51,12 +59,28 @@ export default function SettingsPage() {
       const { data: settings } = await supabase
         .from('m_settings')
         .select('key, value')
-        .in('key', ['gross_profit_alert_threshold']);
+        .in('key', [
+          'gross_profit_alert_threshold',
+          'attendance_standard_daily_hours',
+          'attendance_overtime_alert_hours',
+          'hr_person_id',
+        ]);
       if (settings) {
         settings.forEach((s) => {
           if (s.key === 'gross_profit_alert_threshold') setBonusAlertRate(s.value);
+          if (s.key === 'attendance_standard_daily_hours') setStandardDailyHours(s.value);
+          if (s.key === 'attendance_overtime_alert_hours') setOvertimeAlertHours(s.value);
+          if (s.key === 'hr_person_id') setHrPersonId(s.value);
         });
       }
+
+      // アクティブユーザー一覧（人事担当者選択用）
+      const { data: users } = await supabase
+        .from('m_users')
+        .select('id, name')
+        .eq('status', 'active')
+        .order('name');
+      if (users) setActiveUsers(users as UserOption[]);
 
       setLoading(false);
     })();
@@ -82,6 +106,19 @@ export default function SettingsPage() {
       .upsert({ key: 'gross_profit_alert_threshold', value: bonusAlertRate }, { onConflict: 'key' });
     if (error) showToast('設定の保存に失敗しました', 'error');
     else showToast('システム設定を保存しました');
+  };
+
+  const handleSaveAttendanceSettings = async () => {
+    if (user?.role !== 'admin') return;
+    const supabase = createClient();
+    const rows = [
+      { key: 'attendance_standard_daily_hours', value: standardDailyHours },
+      { key: 'attendance_overtime_alert_hours', value: overtimeAlertHours },
+      { key: 'hr_person_id',                   value: hrPersonId },
+    ].filter(r => r.value !== '');
+    const { error } = await supabase.from('m_settings').upsert(rows, { onConflict: 'key' });
+    if (error) showToast('勤怠設定の保存に失敗しました', 'error');
+    else showToast('勤怠設定を保存しました');
   };
 
   if (loading) {
@@ -190,6 +227,107 @@ export default function SettingsPage() {
                   type="number"
                   min="0"
                   max="100"
+                  className="form-input w-32"
+                  value={bonusAlertRate}
+                  onChange={(e) => setBonusAlertRate(e.target.value)}
+                />
+                <span className="flex items-center text-gray-500">%</span>
+                <button onClick={handleSaveSystemSettings} className="btn-primary text-sm py-2 px-4">
+                  <span className="material-icons text-base">save</span>保存
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* 勤怠設定（admin のみ） */}
+      {user?.role === 'admin' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h3 className="font-bold text-lg mb-5 flex items-center gap-2">
+            <span className="material-icons text-green-600">schedule</span>勤怠設定
+            <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded ml-1">管理者のみ</span>
+          </h3>
+          <div className="space-y-5">
+            {/* 標準労働時間 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                日標準労働時間（時間）
+              </label>
+              <p className="text-xs text-gray-400 mb-2">残業時間の基準となる1日の所定労働時間</p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number" min="1" max="12" step="0.5"
+                  className="form-input w-24"
+                  value={standardDailyHours}
+                  onChange={(e) => setStandardDailyHours(e.target.value)}
+                />
+                <span className="text-gray-500 text-sm">時間 / 日</span>
+              </div>
+            </div>
+
+            {/* 月間残業アラート */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                月間残業アラート時間（時間）
+              </label>
+              <p className="text-xs text-gray-400 mb-2">この時間を超えると本人・管理者・人事担当者にLINEでアラートを送信します</p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number" min="1" max="200"
+                  className="form-input w-24"
+                  value={overtimeAlertHours}
+                  onChange={(e) => setOvertimeAlertHours(e.target.value)}
+                />
+                <span className="text-gray-500 text-sm">時間 / 月</span>
+              </div>
+            </div>
+
+            {/* 人事担当者 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                人事担当者
+              </label>
+              <p className="text-xs text-gray-400 mb-2">残業アラートの通知先となる人事担当者を設定します</p>
+              <select
+                className="form-input w-64"
+                value={hrPersonId}
+                onChange={(e) => setHrPersonId(e.target.value)}
+              >
+                <option value="">（未設定）</option>
+                {activeUsers.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="pt-2">
+              <button onClick={handleSaveAttendanceSettings} className="btn-primary text-sm">
+                <span className="material-icons text-base">save</span>
+                勤怠設定を保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* システム設定（admin のみ）- 接続情報等 */}
+      {user?.role === 'admin' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h3 className="font-bold text-lg mb-5 flex items-center gap-2">
+            <span className="material-icons text-green-600">settings</span>その他システム設定
+            <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded ml-1">管理者のみ</span>
+          </h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                粗利率アラート閾値（%）
+              </label>
+              <p className="text-xs text-gray-400 mb-2">この粗利率を下回る案件にアラートを表示します</p>
+              <div className="flex gap-2">
+                <input
+                  type="number" min="0" max="100"
                   className="form-input w-32"
                   value={bonusAlertRate}
                   onChange={(e) => setBonusAlertRate(e.target.value)}
