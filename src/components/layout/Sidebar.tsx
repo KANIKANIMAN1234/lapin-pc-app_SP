@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/authStore';
 const NAV_ITEMS = [
   { href: '/dashboard', icon: 'dashboard', label: 'ダッシュボード' },
   { href: '/projects', icon: 'folder', label: '案件一覧' },
+  { href: '/attendance', icon: 'schedule', label: '出退勤' },
   { href: '/expense', icon: 'receipt_long', label: '経費登録' },
   { href: '/followup', icon: 'follow_the_signs', label: '追客管理' },
   { href: '/inspection', icon: 'event_note', label: '点検スケジュール' },
