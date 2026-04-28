@@ -45,10 +45,14 @@ export interface MapCustomer {
   assignedTo?: string;
 }
 
-function createCustomIcon(status: string, name: string) {
+function createCustomIcon(status: string, name: string, editMode = false, saving = false) {
   const color = STATUS_COLORS[status] ?? '#6b7280';
   const char = STATUS_CHARS[status] ?? '?';
   const displayName = name.length > 8 ? name.slice(0, 8) + '…' : name;
+
+  const border = editMode
+    ? saving ? '2px dashed #ef4444' : '2px dashed #2563eb'
+    : '1.5px solid #e5e7eb';
 
   const html = `
     <div style="
@@ -57,17 +61,17 @@ function createCustomIcon(status: string, name: string) {
       align-items: center;
       gap: 5px;
       background: white;
-      border: 1.5px solid #e5e7eb;
+      border: ${border};
       border-radius: 20px;
       padding: 4px 8px 4px 4px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.18);
       white-space: nowrap;
-      cursor: pointer;
+      cursor: ${editMode ? 'grab' : 'pointer'};
     ">
       <div style="
         width: 26px; height: 26px;
         border-radius: 50%;
-        background: ${color};
+        background: ${saving ? '#9ca3af' : color};
         color: white;
         font-size: 12px;
         font-weight: 700;
@@ -75,9 +79,12 @@ function createCustomIcon(status: string, name: string) {
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
-      ">${char}</div>
+      ">${saving ? '…' : char}</div>
       <span style="font-size: 12px; font-weight: 600; color: #1f2937;">${displayName}</span>
-      <span style="font-size: 13px; color: #9ca3af; line-height: 1;">&#128100;</span>
+      ${editMode
+        ? `<span style="font-size: 13px; color: #2563eb; line-height: 1;" title="ドラッグして移動">&#8597;</span>`
+        : `<span style="font-size: 13px; color: #9ca3af; line-height: 1;">&#128100;</span>`
+      }
     </div>
     <div style="
       position: absolute;
@@ -132,6 +139,9 @@ interface MapContentProps {
   onFocusResolved?: (customer: MapCustomer, coords: [number, number]) => void;
   geocodingCount?: number;
   onGeocodingProgress?: (remaining: number) => void;
+  editMode?: boolean;
+  onPositionSaved?: (name: string) => void;
+  onPositionError?: (name: string) => void;
 }
 
 function MapContent({
@@ -143,9 +153,13 @@ function MapContent({
   focusProjectId,
   onFocusResolved,
   onGeocodingProgress,
+  editMode = false,
+  onPositionSaved,
+  onPositionError,
 }: MapContentProps) {
   const [customers, setCustomers] = useState<MapCustomer[]>([]);
   const [focusHandled, setFocusHandled] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
   const geocodingRef = useRef(false);
 
   useEffect(() => {
@@ -156,7 +170,7 @@ function MapContent({
     const SELECT = 'id, customer_name, lat, lng, status, work_type, inquiry_date, address, assigned_to';
 
     (async () => {
-      // ① 座標あり → 即表示（サーバー側で lat/lng NOT NULL を条件にする）
+      // ① 座標あり → 即表示
       const { data: withCoords, error: e1 } = await supabase
         .from('t_projects')
         .select(SELECT)
@@ -169,7 +183,6 @@ function MapContent({
       const mapped = (withCoords ?? []).map(toMapCustomer);
       setCustomers(mapped);
 
-      // フォーカス対象の処理（座標ありの中から）
       if (focusProjectId && !focusHandled && onFocusResolved) {
         const target = mapped.find((c) => c.id === focusProjectId);
         if (target) {
@@ -178,7 +191,7 @@ function MapContent({
         }
       }
 
-      // ② 座標なし・住所あり → ジオコードが必要な案件のみ取得
+      // ② 座標なし・住所あり → ジオコード
       const { data: needGeocode, error: e2 } = await supabase
         .from('t_projects')
         .select(SELECT)
@@ -198,26 +211,25 @@ function MapContent({
       let remaining = toGeocode.length;
 
       for (const p of toGeocode) {
-        await new Promise((r) => setTimeout(r, 1100)); // Nominatim: 1req/sec
+        await new Promise((r) => setTimeout(r, 1100));
         const coords = await geocodeAddress(p.address as string);
         remaining -= 1;
         onGeocodingProgress?.(remaining);
 
         if (coords) {
-              const [lat, lng] = coords;
-              // サービスロールキー経由のAPIで保存（RLSをバイパス）
-              const saveRes = await fetch('/api/save-geocode', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: p.id, lat, lng }),
-              });
-              if (!saveRes.ok) {
-                const err = await saveRes.json().catch(() => ({}));
-                console.error('[Map] lat/lng save error:', err);
-              } else {
-                setCustomers((prev) => [...prev, toMapCustomer({ ...p, lat, lng })]);
-              }
-            }
+          const [lat, lng] = coords;
+          const saveRes = await fetch('/api/save-geocode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: p.id, lat, lng }),
+          });
+          if (!saveRes.ok) {
+            const err = await saveRes.json().catch(() => ({}));
+            console.error('[Map] lat/lng save error:', err);
+          } else {
+            setCustomers((prev) => [...prev, toMapCustomer({ ...p, lat, lng })]);
+          }
+        }
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -225,9 +237,34 @@ function MapContent({
 
   const handleMarkerClick = useCallback(
     (customer: MapCustomer) => {
+      if (editMode) return; // 位置修正モード中はクリック選択を無効化
       onSelectCustomer(selectedCustomer?.id === customer.id ? null : customer);
     },
-    [selectedCustomer?.id, onSelectCustomer]
+    [selectedCustomer?.id, onSelectCustomer, editMode]
+  );
+
+  const handleDragEnd = useCallback(
+    async (customer: MapCustomer, e: L.LeafletEvent) => {
+      const { lat, lng } = (e.target as L.Marker).getLatLng();
+      setSavingId(customer.id);
+      try {
+        const saveRes = await fetch('/api/save-geocode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: customer.id, lat, lng }),
+        });
+        if (!saveRes.ok) throw new Error('save failed');
+        setCustomers((prev) =>
+          prev.map((c) => (c.id === customer.id ? { ...c, lat, lng } : c))
+        );
+        onPositionSaved?.(customer.name);
+      } catch {
+        onPositionError?.(customer.name);
+      } finally {
+        setSavingId(null);
+      }
+    },
+    [onPositionSaved, onPositionError]
   );
 
   const defaultCenter: [number, number] =
@@ -258,36 +295,47 @@ function MapContent({
         <Marker
           key={customer.id}
           position={[customer.lat, customer.lng]}
-          icon={createCustomIcon(customer.status, customer.name)}
-          eventHandlers={{ click: () => handleMarkerClick(customer) }}
+          icon={createCustomIcon(
+            customer.status,
+            customer.name,
+            editMode,
+            savingId === customer.id
+          )}
+          draggable={editMode}
+          eventHandlers={{
+            click: () => handleMarkerClick(customer),
+            dragend: editMode ? (e) => handleDragEnd(customer, e) : undefined,
+          }}
         >
-          <Popup>
-            <div style={{ minWidth: 160 }}>
-              <p style={{ fontWeight: 700, marginBottom: 4 }}>{customer.name}</p>
-              {customer.address && (
-                <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{customer.address}</p>
-              )}
-              <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>{customer.lastWork}</p>
-              <a
-                href={`/projects/${customer.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'block',
-                  textAlign: 'center',
-                  padding: '4px 12px',
-                  background: '#06C755',
-                  color: 'white',
-                  borderRadius: 6,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  textDecoration: 'none',
-                }}
-              >
-                詳細を見る →
-              </a>
-            </div>
-          </Popup>
+          {!editMode && (
+            <Popup>
+              <div style={{ minWidth: 160 }}>
+                <p style={{ fontWeight: 700, marginBottom: 4 }}>{customer.name}</p>
+                {customer.address && (
+                  <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{customer.address}</p>
+                )}
+                <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>{customer.lastWork}</p>
+                <a
+                  href={`/projects/${customer.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'block',
+                    textAlign: 'center',
+                    padding: '4px 12px',
+                    background: '#06C755',
+                    color: 'white',
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    textDecoration: 'none',
+                  }}
+                >
+                  詳細を見る →
+                </a>
+              </div>
+            </Popup>
+          )}
         </Marker>
       ))}
     </MapContainer>

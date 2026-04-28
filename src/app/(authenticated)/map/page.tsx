@@ -111,6 +111,13 @@ function MapPageInner() {
   const [filterMyOnly, setFilterMyOnly] = useState(false);
   const [saving, setSaving] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [posToast, setPosToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+
+  const showPosToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setPosToast({ msg, type });
+    setTimeout(() => setPosToast(null), 3000);
+  };
 
   const isSales = user?.role === 'sales';
 
@@ -199,6 +206,17 @@ function MapPageInner() {
 
   return (
     <div>
+      {/* 位置保存トースト */}
+      {posToast && (
+        <div className={`fixed top-4 right-4 z-[9999] px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium flex items-center gap-2
+          ${posToast.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+          <span className="material-icons text-base">
+            {posToast.type === 'success' ? 'check_circle' : 'error'}
+          </span>
+          {posToast.msg}
+        </div>
+      )}
+
       {/* タイトル行 */}
       <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
         <div className="flex items-center gap-3">
@@ -230,6 +248,20 @@ function MapPageInner() {
           )}
           <button
             type="button"
+            onClick={() => setEditMode((v) => !v)}
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+              editMode
+                ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-600'
+            }`}
+          >
+            <span className="material-icons" style={{ fontSize: 15 }}>
+              {editMode ? 'edit_off' : 'edit_location_alt'}
+            </span>
+            {editMode ? '修正モードON' : '位置を修正'}
+          </button>
+          <button
+            type="button"
             className="btn-area-setting"
             onClick={() => setShowAreaModal(true)}
           >
@@ -238,6 +270,20 @@ function MapPageInner() {
           </button>
         </div>
       </div>
+
+      {/* 位置修正モード時のガイドバナー */}
+      {editMode && (
+        <div className="flex items-center gap-2 px-4 py-2 mb-2 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700">
+          <span className="material-icons text-base text-blue-500">info</span>
+          マーカーをドラッグして正しい位置に移動してください。離した時点で自動保存されます。
+          <button
+            className="ml-auto text-xs underline text-blue-500 hover:text-blue-700"
+            onClick={() => setEditMode(false)}
+          >
+            終了
+          </button>
+        </div>
+      )}
 
       {/* 凡例バー（マップ上部・横並び） */}
       <div className="flex items-center gap-4 px-4 py-2 mb-3 bg-white rounded-xl shadow-sm text-xs text-gray-700 flex-wrap">
@@ -264,6 +310,9 @@ function MapPageInner() {
               setFocusCenter(coords);
             }}
             onGeocodingProgress={setGeocodingRemaining}
+            editMode={editMode}
+            onPositionSaved={(name) => showPosToast(`「${name}」の位置を保存しました`)}
+            onPositionError={(name) => showPosToast(`「${name}」の保存に失敗しました`, 'error')}
           />
         </div>
 
