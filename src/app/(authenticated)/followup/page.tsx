@@ -3,8 +3,26 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase';
 import type { ProjectStatus } from '@/types';
+
+// API レスポンス型
+interface ApiProjectRow {
+  id: string;
+  project_number: string;
+  customer_name: string;
+  address: string | null;
+  phone: string | null;
+  status: string;
+  work_type: string[] | null;
+  work_description: string | null;
+  estimated_amount: number | null;
+  inquiry_date: string | null;
+  contract_date: string | null;
+  notes: string | null;
+  assigned_to: string | null;
+  assigned_to_name: string | null;
+  latest_meeting_date: string | null;
+}
 
 // 追客対象ステータス
 const FOLLOWUP_STATUSES: ProjectStatus[] = ['inquiry', 'estimate', 'followup_status'];
@@ -59,48 +77,18 @@ export default function FollowupPage() {
   const [keyword, setKeyword] = useState('');
   const [editStatusId, setEditStatusId] = useState<string | null>(null);
 
-  // ── データ取得 ──────────────────────────────────────────
+  // ── データ取得（サービスロールAPIルート経由でRLSバイパス） ────
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ['followup-projects'],
     queryFn: async (): Promise<ProjectRow[]> => {
-      const supabase = createClient();
+      const res = await fetch('/api/followup');
+      if (!res.ok) throw new Error('追客データの取得に失敗しました');
+      const json = await res.json() as { projects?: ApiProjectRow[]; error?: string };
+      if (json.error) throw new Error(json.error);
 
-      // 追客対象の案件を取得
-      const { data: pj, error } = await supabase
-        .from('t_projects')
-        .select(`
-          id, project_number, customer_name, address, phone, status,
-          work_type, work_description, estimated_amount,
-          inquiry_date, contract_date, notes,
-          assigned_to, assigned_to_name
-        `)
-        .in('status', FOLLOWUP_STATUSES)
-        .is('deleted_at', null)
-        .order('inquiry_date', { ascending: false });
-
-      if (error) throw error;
-      const pjList = pj ?? [];
-
-      // 最新商談日を一括取得
-      const ids = pjList.map((p) => p.id);
-      let meetingMap: Record<string, string> = {};
-      if (ids.length > 0) {
-        const { data: meetings } = await supabase
-          .from('t_meetings')
-          .select('project_id, meeting_date')
-          .in('project_id', ids)
-          .is('deleted_at', null)
-          .order('meeting_date', { ascending: false });
-        // 最新1件のみ保持
-        (meetings ?? []).forEach((m) => {
-          if (!meetingMap[m.project_id]) meetingMap[m.project_id] = m.meeting_date;
-        });
-      }
-
-      return pjList.map((p) => {
-        const dsi  = daysSince(p.inquiry_date);
-        const dsm  = daysSince(meetingMap[p.id] ?? null);
-        // 緊急度判定
+      return (json.projects ?? []).map((p) => {
+        const dsi = daysSince(p.inquiry_date);
+        const dsm = daysSince(p.latest_meeting_date);
         const urgency: ProjectRow['urgency'] =
           (dsi !== null && dsi > 30) || (dsm !== null && dsm > 21)
             ? 'critical'
@@ -109,7 +97,6 @@ export default function FollowupPage() {
             : 'normal';
         return {
           ...p,
-          latest_meeting_date: meetingMap[p.id] ?? null,
           days_since_inquiry:  dsi,
           days_since_meeting:  dsm,
           urgency,
@@ -118,12 +105,16 @@ export default function FollowupPage() {
     },
   });
 
-  // ── ステータス更新 ──────────────────────────────────────
+  // ── ステータス更新（APIルート経由） ─────────────────────
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const supabase = createClient();
-      const { error } = await supabase.from('t_projects').update({ status }).eq('id', id);
-      if (error) throw error;
+      const res = await fetch('/api/followup', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status }),
+      });
+      const json = await res.json() as { error?: string };
+      if (json.error) throw new Error(json.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['followup-projects'] });
