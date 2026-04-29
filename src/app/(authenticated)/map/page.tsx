@@ -101,6 +101,7 @@ function MapPageInner() {
   }, []);
   const [showAreaModal, setShowAreaModal] = useState(false);
   const [focusCenter, setFocusCenter] = useState<[number, number] | null>(null);
+  const [focusZoom, setFocusZoom] = useState<number | undefined>(undefined);
   const [geocodingRemaining, setGeocodingRemaining] = useState(0);
 
   const [areaType, setAreaType] = useState<'company' | 'custom'>('company');
@@ -325,12 +326,14 @@ function MapPageInner() {
             selectedCustomer={selectedCustomer}
             onSelectCustomer={setSelectedCustomer}
             center={focusCenter ?? savedCenter}
+            centerZoom={focusZoom}
             filterMyOnly={filterMyOnly}
             currentUserId={user?.id ? String(user.id) : undefined}
             focusProjectId={focusProjectId}
             onFocusResolved={(customer, coords) => {
               setSelectedCustomer(customer);
               setFocusCenter(coords);
+              setFocusZoom(16);
             }}
             onGeocodingProgress={setGeocodingRemaining}
             editMode={editMode}

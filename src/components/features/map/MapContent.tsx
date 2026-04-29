@@ -108,11 +108,15 @@ function createCustomIcon(status: string, name: string, editMode = false, saving
   });
 }
 
-function MapCenterUpdater({ center }: { center: [number, number] }) {
+function MapCenterUpdater({ center, zoom }: { center: [number, number]; zoom?: number }) {
   const map = useMap();
   useEffect(() => {
-    map.setView(center, map.getZoom());
-  }, [center, map]);
+    if (zoom != null) {
+      map.flyTo(center, zoom, { animate: true, duration: 0.8 });
+    } else {
+      map.setView(center, map.getZoom());
+    }
+  }, [center, zoom, map]);
   return null;
 }
 
@@ -134,6 +138,7 @@ interface MapContentProps {
   selectedCustomer: MapCustomer | null;
   onSelectCustomer: (customer: MapCustomer | null) => void;
   center?: [number, number];
+  centerZoom?: number;
   filterMyOnly?: boolean;
   currentUserId?: string;
   focusProjectId?: string;
@@ -149,6 +154,7 @@ function MapContent({
   selectedCustomer,
   onSelectCustomer,
   center,
+  centerZoom,
   filterMyOnly,
   currentUserId,
   focusProjectId,
@@ -291,7 +297,7 @@ function MapContent({
         subdomains={['0', '1', '2', '3']}
         maxZoom={22}
       />
-      {center && <MapCenterUpdater center={center} />}
+      {center && <MapCenterUpdater center={center} zoom={centerZoom} />}
       {displayCustomers.map((customer) => (
         <Marker
           key={customer.id}
