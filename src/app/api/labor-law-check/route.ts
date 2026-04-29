@@ -13,6 +13,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+// Supabase generated types が未設定の環境でも型エラーを回避するための型エイリアス
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SupabaseClient = ReturnType<typeof createClient<any>>;
+function makeClient(url: string, key: string): SupabaseClient {
+  return createClient(url, key);
+}
+
 // ── 定数 ────────────────────────────────────────────────────────────
 const BREAK_6H_MIN  = 45;   // 6時間超の最低休憩分
 const BREAK_8H_MIN  = 60;   // 8時間超の最低休憩分
@@ -44,19 +51,19 @@ async function sendPush(lineUserId: string, text: string, accessToken: string) {
 
 // ── 送信済みフラグ確認・セット ──────────────────────────────────
 async function isAlreadyNotified(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   key: string
 ): Promise<boolean> {
   const { data } = await supabase
     .from('m_settings')
     .select('value')
     .eq('key', key)
-    .maybeSingle() as { data: { value: string } | null };
-  return data?.value === '1';
+    .maybeSingle();
+  return (data as { value: string } | null)?.value === '1';
 }
 
 async function markNotified(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   key: string
 ) {
   await supabase
@@ -66,7 +73,7 @@ async function markNotified(
 
 // ── LINEアラート送信（本人・管理者・人事担当者） ────────────────
 async function sendAlert(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   targetLineUserId: string | null,
   hrPersonId: string,
   accessToken: string,
@@ -83,8 +90,8 @@ async function sendAlert(
     .from('m_users')
     .select('line_user_id')
     .eq('role', 'admin')
-    .eq('status', 'active') as { data: { line_user_id: string }[] | null };
-  for (const a of admins ?? []) {
+    .eq('status', 'active');
+  for (const a of (admins ?? []) as { line_user_id: string }[]) {
     if (a.line_user_id && !sentIds.has(a.line_user_id)) {
       await sendPush(a.line_user_id, message, accessToken);
       sentIds.add(a.line_user_id);
@@ -92,11 +99,12 @@ async function sendAlert(
   }
 
   if (hrPersonId) {
-    const { data: hr } = await supabase
+    const { data: hrRaw } = await supabase
       .from('m_users')
       .select('line_user_id')
       .eq('id', hrPersonId)
-      .single() as { data: { line_user_id: string } | null };
+      .single();
+    const hr = hrRaw as { line_user_id: string } | null;
     if (hr?.line_user_id && !sentIds.has(hr.line_user_id)) {
       await sendPush(hr.line_user_id, message, accessToken);
       sentIds.add(hr.line_user_id);
@@ -135,10 +143,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'env not configured' }, { status: 500 });
     }
 
-    const supabase = createClient(supabaseUrl, serviceKey);
+    const supabase = makeClient(supabaseUrl, serviceKey);
 
     // ── 設定取得 ───────────────────────────────────────────────
-    const { data: settingsRows } = await supabase
+    const { data: settingsRaw } = await supabase
       .from('m_settings')
       .select('key, value')
       .in('key', [
@@ -148,10 +156,11 @@ export async function POST(req: NextRequest) {
         'labor_overtime_warn',
         'labor_overtime_alert',
         'labor_overtime_critical',
-      ]) as { data: { key: string; value: string }[] | null };
+      ]);
+    const settingsRows = (settingsRaw ?? []) as { key: string; value: string }[];
 
     const s: Record<string, string> = {};
-    (settingsRows ?? []).forEach((r) => { s[r.key] = r.value; });
+    settingsRows.forEach((r) => { s[r.key] = r.value; });
 
     if (s['labor_law_check_enabled'] === '0') {
       return NextResponse.json({ success: true, skipped: true });
@@ -164,11 +173,12 @@ export async function POST(req: NextRequest) {
     const overtimeCriticalH = Number(s['labor_overtime_critical'] ?? 100);
 
     // ── 対象ユーザー情報 ──────────────────────────────────────
-    const { data: targetUser } = await supabase
+    const { data: targetUserRaw } = await supabase
       .from('m_users')
       .select('name, line_user_id')
       .eq('id', user_id)
-      .single() as { data: { name: string; line_user_id: string } | null };
+      .single();
+    const targetUser = targetUserRaw as { name: string; line_user_id: string } | null;
     const userName = targetUser?.name ?? 'スタッフ';
     const targetLine = targetUser?.line_user_id ?? null;
 
@@ -252,12 +262,13 @@ export async function POST(req: NextRequest) {
       const prevDate = new Date(date);
       prevDate.setDate(prevDate.getDate() - 1);
       const prevDateStr = prevDate.toISOString().slice(0, 10);
-      const { data: prevAtt } = await supabase
+      const { data: prevAttRaw } = await supabase
         .from('t_attendance')
         .select('clock_out')
         .eq('user_id', user_id)
         .eq('date', prevDateStr)
-        .maybeSingle() as { data: { clock_out: string } | null };
+        .maybeSingle();
+      const prevAtt = prevAttRaw as { clock_out: string } | null;
 
       if (prevAtt?.clock_out) {
         const toMinOfDay = (t: string) => {
@@ -301,14 +312,15 @@ export async function POST(req: NextRequest) {
         d.setDate(d.getDate() - i);
         past7.push(d.toISOString().slice(0, 10));
       }
-      const { data: recentAtt } = await supabase
+      const { data: recentAttRaw } = await supabase
         .from('t_attendance')
         .select('date')
         .eq('user_id', user_id)
         .in('date', past7)
-        .not('clock_in', 'is', null) as { data: { date: string }[] | null };
+        .not('clock_in', 'is', null);
+      const recentAtt = (recentAttRaw ?? []) as { date: string }[];
 
-      const workedDays = new Set((recentAtt ?? []).map((r) => r.date));
+      const workedDays = new Set(recentAtt.map((r) => r.date));
       let consecutive = 1;
       for (let i = 1; i <= 7; i++) {
         const d = new Date(checkDate);
@@ -345,15 +357,16 @@ export async function POST(req: NextRequest) {
       const fromDate = `${year}-${String(month).padStart(2, '0')}-01`;
       const toDate   = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
-      const { data: monthRecords } = await supabase
+      const { data: monthRecordsRaw } = await supabase
         .from('t_attendance')
         .select('total_work_minutes')
         .eq('user_id', user_id)
         .gte('date', fromDate)
         .lte('date', toDate)
-        .not('total_work_minutes', 'is', null) as { data: { total_work_minutes: number }[] | null };
+        .not('total_work_minutes', 'is', null);
+      const monthRecords = (monthRecordsRaw ?? []) as { total_work_minutes: number }[];
 
-      const totalOvertimeMin = (monthRecords ?? []).reduce((sum, r) => {
+      const totalOvertimeMin = monthRecords.reduce((sum, r) => {
         return sum + Math.max(0, (r.total_work_minutes ?? 0) - standardDailyMinutes);
       }, 0);
       const totalOvertimeH = totalOvertimeMin / 60;
