@@ -46,10 +46,13 @@ const STATUS_BG: Record<string, string> = {
 
 export default function ProjectsPage() {
   const { user } = useAuthStore();
+  const isAdmin = user?.role === 'admin';
+  const isSales = user?.role === 'sales';
   const updateProject = useUpdateProject();
   const [keyword, setKeyword] = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState<ProjectStatus[]>([]);
-  const [myOnly, setMyOnly] = useState(false);
+  // 営業担当は初期状態で自分の案件のみ表示
+  const [myOnly, setMyOnly] = useState(isSales);
   const [sortKey, setSortKey] = useState<'inquiry_date' | 'contract_amount' | 'status'>('inquiry_date');
   const [sortAsc, setSortAsc] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -174,19 +177,32 @@ export default function ProjectsPage() {
               ))}
             </div>
           </div>
-          <div className="search-field" style={{ flexBasis: 'auto', flexGrow: 0 }}>
-            <label>絞り込み</label>
-            <label className="flex items-center gap-1.5 mt-1 cursor-pointer text-sm">
-              <input
-                type="checkbox"
-                checked={myOnly}
-                onChange={(e) => setMyOnly(e.target.checked)}
-                className="rounded"
-                style={{ accentColor: '#06C755' }}
-              />
-              自分の担当のみ
-            </label>
-          </div>
+          {/* 管理者のみ「自分の担当のみ」チェックボックスを表示（営業担当は常に自分の案件のみ） */}
+          {isAdmin && (
+            <div className="search-field" style={{ flexBasis: 'auto', flexGrow: 0 }}>
+              <label>絞り込み</label>
+              <label className="flex items-center gap-1.5 mt-1 cursor-pointer text-sm">
+                <input
+                  type="checkbox"
+                  checked={myOnly}
+                  onChange={(e) => setMyOnly(e.target.checked)}
+                  className="rounded"
+                  style={{ accentColor: '#06C755' }}
+                />
+                自分の担当のみ
+              </label>
+            </div>
+          )}
+          {/* 営業担当：自分の案件のみ表示中であることを示すバッジ */}
+          {isSales && (
+            <div className="search-field" style={{ flexBasis: 'auto', flexGrow: 0 }}>
+              <label>絞り込み</label>
+              <span className="inline-flex items-center gap-1 mt-1 px-2 py-1 bg-green-50 border border-green-200 text-green-700 text-xs rounded-lg font-medium">
+                <span className="material-icons" style={{ fontSize: 13 }}>person</span>
+                自分の担当のみ表示中
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -215,6 +231,8 @@ export default function ProjectsPage() {
                   <th>顧客名</th>
                   <th>住所</th>
                   <th>工事種別</th>
+                  {/* 管理者のみ担当者列を表示 */}
+                  {isAdmin && <th>担当者</th>}
                   <th
                     onClick={() => handleSort('status')}
                     className="cursor-pointer select-none"
@@ -267,6 +285,19 @@ export default function ProjectsPage() {
                         )}
                       </div>
                     </td>
+                    {/* 管理者のみ担当者名を表示 */}
+                    {isAdmin && (
+                      <td className="text-sm text-gray-700">
+                        {project.assigned_to_name ? (
+                          <span className="inline-flex items-center gap-1">
+                            <span className="material-icons text-gray-400" style={{ fontSize: 14 }}>person</span>
+                            {project.assigned_to_name}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 text-xs">未設定</span>
+                        )}
+                      </td>
+                    )}
                     <td>
                       {updatingId === project.id ? (
                         <span className="inline-block w-4 h-4 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin" />
