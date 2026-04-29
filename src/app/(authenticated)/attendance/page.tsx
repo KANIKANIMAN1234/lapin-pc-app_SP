@@ -451,18 +451,29 @@ export default function AttendancePage() {
                   <span className={`material-icons text-lg ${cfg.color}`}>{cfg.icon}</span>
                   <span className="font-bold text-gray-800">{log.time}</span>
                   <span className={`text-sm font-medium ${cfg.color}`}>{log.label}</span>
-                  {locUrl ? (
-                    <a href={locUrl} target="_blank" rel="noopener noreferrer"
-                      title="地図で確認"
-                      className={`ml-auto flex items-center gap-0.5 text-xs font-medium ${cfg.color} hover:underline`}>
-                      <span className="material-icons" style={{ fontSize: 14 }}>location_on</span>
-                      位置
-                    </a>
-                  ) : (log.type === 'clock_in' || log.type === 'clock_out') ? (
-                    <span className="ml-auto text-xs text-gray-300 flex items-center gap-0.5">
-                      <span className="material-icons" style={{ fontSize: 14 }}>location_off</span>
-                    </span>
-                  ) : null}
+                  {(log.type === 'clock_in' || log.type === 'clock_out') && (
+                    locUrl ? (
+                      <a
+                        href={locUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={log.type === 'clock_in' ? '出勤時の位置を地図で確認' : '退勤時の位置を地図で確認'}
+                        className={`ml-auto flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg border
+                          ${log.type === 'clock_in'
+                            ? 'text-green-700 border-green-200 bg-green-50 hover:bg-green-100'
+                            : 'text-red-600 border-red-200 bg-red-50 hover:bg-red-100'
+                          } transition-colors`}
+                      >
+                        <span className="material-icons" style={{ fontSize: 13 }}>location_on</span>
+                        地図で確認
+                      </a>
+                    ) : (
+                      <span className="ml-auto flex items-center gap-0.5 text-xs text-gray-300" title="位置情報未取得">
+                        <span className="material-icons" style={{ fontSize: 13 }}>location_off</span>
+                        <span className="text-[10px]">未取得</span>
+                      </span>
+                    )
+                  )}
                 </div>
               );
             })}
@@ -533,7 +544,7 @@ export default function AttendancePage() {
                     <th className="px-3 py-2.5 text-center font-medium">休憩</th>
                     <th className="px-3 py-2.5 text-center font-medium">退勤</th>
                     <th className="px-3 py-2.5 text-center font-medium">実労働時間</th>
-                    <th className="px-3 py-2.5 text-center font-medium rounded-r-lg">位置</th>
+                    <th className="px-3 py-2.5 text-center font-medium rounded-r-lg" style={{ minWidth: 88 }}>位置（出勤/退勤）</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -576,23 +587,42 @@ export default function AttendancePage() {
                           </span>
                         </td>
                         <td className="px-3 py-3 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            {row.clock_in_location && (
-                              <a href={row.clock_in_location} target="_blank" rel="noopener noreferrer"
-                                title="出勤時の位置"
-                                className="text-green-500 hover:text-green-700">
-                                <span className="material-icons" style={{ fontSize: 16 }}>login</span>
+                          <div className="flex items-center justify-center gap-3">
+                            {/* 出勤位置 */}
+                            {row.clock_in_location ? (
+                              <a
+                                href={row.clock_in_location}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="出勤時の位置を地図で確認"
+                                className="flex flex-col items-center gap-0.5 text-green-600 hover:text-green-800 transition-colors"
+                              >
+                                <span className="material-icons" style={{ fontSize: 18 }}>location_on</span>
+                                <span className="text-[9px] font-bold leading-none">出勤</span>
                               </a>
+                            ) : (
+                              <div className="flex flex-col items-center gap-0.5 text-gray-300" title="出勤位置未取得">
+                                <span className="material-icons" style={{ fontSize: 18 }}>location_off</span>
+                                <span className="text-[9px] leading-none">出勤</span>
+                              </div>
                             )}
-                            {row.clock_out_location && (
-                              <a href={row.clock_out_location} target="_blank" rel="noopener noreferrer"
-                                title="退勤時の位置"
-                                className="text-red-400 hover:text-red-600">
-                                <span className="material-icons" style={{ fontSize: 16 }}>logout</span>
+                            {/* 退勤位置 */}
+                            {row.clock_out_location ? (
+                              <a
+                                href={row.clock_out_location}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="退勤時の位置を地図で確認"
+                                className="flex flex-col items-center gap-0.5 text-red-500 hover:text-red-700 transition-colors"
+                              >
+                                <span className="material-icons" style={{ fontSize: 18 }}>location_on</span>
+                                <span className="text-[9px] font-bold leading-none">退勤</span>
                               </a>
-                            )}
-                            {!row.clock_in_location && !row.clock_out_location && (
-                              <span className="text-gray-300 text-xs">-</span>
+                            ) : (
+                              <div className="flex flex-col items-center gap-0.5 text-gray-300" title="退勤位置未取得">
+                                <span className="material-icons" style={{ fontSize: 18 }}>location_off</span>
+                                <span className="text-[9px] leading-none">退勤</span>
+                              </div>
                             )}
                           </div>
                         </td>
