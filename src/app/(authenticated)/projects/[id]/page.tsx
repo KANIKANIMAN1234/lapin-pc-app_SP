@@ -129,6 +129,26 @@ export default function ProjectDetailPage() {
   const [editingStatus, setEditingStatus] = useState(false);
   const [editingBasic, setEditingBasic] = useState(false);
   const [editForm, setEditForm] = useState<Record<string, string | number>>({});
+  const [editWorkType, setEditWorkType] = useState<string[]>([]);
+
+  // 担当者・工事種別・集客ルートの選択肢
+  const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
+  const [workTypeOptions, setWorkTypeOptions] = useState<string[]>(['外壁塗装', '屋根塗装', '水回り', '内装', '外構', 'その他']);
+  const [acqRouteOptions, setAcqRouteOptions] = useState<string[]>(['紹介', 'チラシ', '看板', 'インターネット', 'その他']);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.from('m_settings').select('value').eq('key', 'work_type_options').single()
+      .then(({ data }) => {
+        if (data?.value) { try { const p = JSON.parse(data.value); if (Array.isArray(p) && p.length) setWorkTypeOptions(p); } catch {} }
+      });
+    supabase.from('m_settings').select('value').eq('key', 'acquisition_route_options').single()
+      .then(({ data }) => {
+        if (data?.value) { try { const p = JSON.parse(data.value); if (Array.isArray(p) && p.length) setAcqRouteOptions(p); } catch {} }
+      });
+    supabase.from('m_users').select('id, name').eq('is_active', true)
+      .then(({ data }) => { if (data) setUsers(data); });
+  }, []);
 
   // 写真
   const [selectedPhotoType, setSelectedPhotoType] = useState<Photo['type']>('before');
@@ -170,21 +190,26 @@ export default function ProjectDetailPage() {
   const startEdit = () => {
     if (!project) return;
     setEditForm({
-      customer_name: project.customer_name ?? '',
-      phone: project.phone ?? '',
-      address: project.address ?? '',
+      customer_name:   project.customer_name ?? '',
+      phone:           project.phone ?? '',
+      address:         project.address ?? '',
       work_description: project.work_description ?? '',
+      acquisition_route: project.acquisition_route ?? '',
+      inquiry_date:    project.inquiry_date  ? String(project.inquiry_date).substring(0, 10)  : '',
+      contract_date:   project.contract_date ? String(project.contract_date).substring(0, 10) : '',
+      start_date:      project.start_date    ? String(project.start_date).substring(0, 10)    : '',
+      completion_date: project.completion_date ? String(project.completion_date).substring(0, 10) : '',
       estimated_amount: project.estimated_amount ?? 0,
-      contract_amount: project.contract_amount ?? 0,
-      planned_budget: project.planned_budget ?? 0,
-      actual_cost: project.actual_cost ?? 0,
-      notes: project.notes ?? '',
+      contract_amount:  project.contract_amount ?? 0,
+      notes:           project.notes ?? '',
+      assigned_to:     project.assigned_to ?? '',
     });
+    setEditWorkType(project.work_type ?? []);
     setEditingBasic(true);
   };
 
   const saveEdit = async () => {
-    await updateProject({ id: projectId, ...editForm });
+    await updateProject({ id: projectId, ...editForm, work_type: editWorkType });
     setEditingBasic(false);
     showToast('基本情報を更新しました');
   };
@@ -422,7 +447,7 @@ export default function ProjectDetailPage() {
       {/* ══════════ 基本情報 ══════════ */}
       {activeTab === 'info' && (
         <div>
-          <div className="flex justify-end mb-4">
+          <div className="flex justify-end mb-3">
             {editingBasic ? (
               <div className="flex gap-2">
                 <button onClick={() => setEditingBasic(false)} className="btn-secondary text-sm">キャンセル</button>
@@ -437,10 +462,14 @@ export default function ProjectDetailPage() {
             )}
           </div>
 
-          <div className="detail-grid">
-            {/* 顧客情報 */}
-            <div className="detail-section">
-              <h3><span className="material-icons text-green-600" style={{ fontSize: 18 }}>person</span> 顧客情報</h3>
+          {/* 3列レイアウト */}
+          <div className="grid grid-cols-3 gap-3">
+
+            {/* ── 列1: 顧客情報 + 担当者 ── */}
+            <div className="detail-section" style={{ padding: '1rem' }}>
+              <h3 style={{ marginBottom: '0.75rem' }}>
+                <span className="material-icons text-green-600" style={{ fontSize: 16 }}>person</span> 顧客情報
+              </h3>
               <InfoRow label="管理番号">{project.project_number}</InfoRow>
               <InfoRow label="顧客名">
                 {editingBasic
@@ -455,19 +484,76 @@ export default function ProjectDetailPage() {
               <InfoRow label="住所">
                 {editingBasic
                   ? <input className="form-input w-full" value={String(editForm.address ?? '')} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} />
-                  : project.address}
+                  : project.address || '-'}
               </InfoRow>
+              <InfoRow label="担当者">
+                {editingBasic
+                  ? (
+                    <select className="form-input w-full" value={String(editForm.assigned_to ?? '')} onChange={(e) => setEditForm({ ...editForm, assigned_to: e.target.value })}>
+                      <option value="">未設定</option>
+                      {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select>
+                  )
+                  : (() => {
+                      const assignee = users.find((u) => u.id === project.assigned_to);
+                      return assignee
+                        ? <span className="inline-flex items-center gap-1"><span className="material-icons text-gray-400" style={{ fontSize: 14 }}>person</span>{assignee.name}</span>
+                        : <span className="text-gray-400 text-xs">未設定</span>;
+                    })()}
+              </InfoRow>
+              {/* メモ（下部に配置） */}
+              <div style={{ marginTop: '0.75rem', borderTop: '1px solid #f3f4f6', paddingTop: '0.75rem' }}>
+                <div className="flex items-center gap-1 mb-1">
+                  <span className="material-icons text-green-600" style={{ fontSize: 14 }}>notes</span>
+                  <span className="text-xs font-bold text-gray-700">メモ・備考</span>
+                </div>
+                {editingBasic ? (
+                  <textarea
+                    className="form-input w-full text-sm"
+                    rows={4}
+                    value={String(editForm.notes ?? '')}
+                    onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                    placeholder="自由記述..."
+                  />
+                ) : (
+                  <p className="text-sm whitespace-pre-wrap text-gray-700">{project.notes || '（なし）'}</p>
+                )}
+              </div>
             </div>
 
-            {/* 工事情報 */}
-            <div className="detail-section">
-              <h3><span className="material-icons text-green-600" style={{ fontSize: 18 }}>construction</span> 工事情報</h3>
+            {/* ── 列2: 工事情報 ── */}
+            <div className="detail-section" style={{ padding: '1rem' }}>
+              <h3 style={{ marginBottom: '0.75rem' }}>
+                <span className="material-icons text-green-600" style={{ fontSize: 16 }}>construction</span> 工事情報
+              </h3>
               <InfoRow label="工事種別">
-                <div className="flex gap-1.5 flex-wrap">
-                  {(project.work_type ?? []).map((w: string) => (
-                    <span key={w} className="px-2 py-0.5 bg-green-50 text-green-700 text-xs font-medium rounded">{w}</span>
-                  ))}
-                </div>
+                {editingBasic ? (
+                  <div className="flex flex-wrap gap-1 mt-0.5">
+                    {workTypeOptions.map((wt) => (
+                      <label key={wt} className="flex items-center gap-0.5 text-xs cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={editWorkType.includes(wt)}
+                          onChange={(e) =>
+                            setEditWorkType(e.target.checked
+                              ? [...editWorkType, wt]
+                              : editWorkType.filter((w) => w !== wt))
+                          }
+                          style={{ accentColor: '#16a34a' }}
+                        />
+                        {wt}
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex gap-1 flex-wrap">
+                    {(project.work_type ?? []).length > 0
+                      ? (project.work_type ?? []).map((w: string) => (
+                          <span key={w} className="px-2 py-0.5 bg-green-50 text-green-700 text-xs font-medium rounded">{w}</span>
+                        ))
+                      : <span className="text-gray-400 text-xs">未設定</span>}
+                  </div>
+                )}
               </InfoRow>
               <InfoRow label="工事内容">
                 {editingBasic
@@ -475,19 +561,44 @@ export default function ProjectDetailPage() {
                   : project.work_description || '-'}
               </InfoRow>
               <InfoRow label="集客ルート">
-                {project.acquisition_route
-                  ? <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded">{project.acquisition_route}</span>
-                  : '-'}
+                {editingBasic ? (
+                  <select className="form-input w-full" value={String(editForm.acquisition_route ?? '')} onChange={(e) => setEditForm({ ...editForm, acquisition_route: e.target.value })}>
+                    <option value="">未設定</option>
+                    {acqRouteOptions.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                ) : (
+                  project.acquisition_route
+                    ? <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded">{project.acquisition_route}</span>
+                    : '-'
+                )}
               </InfoRow>
-              <InfoRow label="問い合わせ日">{fmtDate(project.inquiry_date)}</InfoRow>
-              <InfoRow label="契約日">{fmtDate(project.contract_date)}</InfoRow>
-              <InfoRow label="着工日">{fmtDate(project.start_date)}</InfoRow>
-              <InfoRow label="完工日">{fmtDate(project.completion_date)}</InfoRow>
+              <InfoRow label="問い合わせ日">
+                {editingBasic
+                  ? <input type="date" className="form-input w-full" value={String(editForm.inquiry_date ?? '')} onChange={(e) => setEditForm({ ...editForm, inquiry_date: e.target.value })} />
+                  : fmtDate(project.inquiry_date)}
+              </InfoRow>
+              <InfoRow label="契約日">
+                {editingBasic
+                  ? <input type="date" className="form-input w-full" value={String(editForm.contract_date ?? '')} onChange={(e) => setEditForm({ ...editForm, contract_date: e.target.value })} />
+                  : fmtDate(project.contract_date)}
+              </InfoRow>
+              <InfoRow label="着工日">
+                {editingBasic
+                  ? <input type="date" className="form-input w-full" value={String(editForm.start_date ?? '')} onChange={(e) => setEditForm({ ...editForm, start_date: e.target.value })} />
+                  : fmtDate(project.start_date)}
+              </InfoRow>
+              <InfoRow label="完工日">
+                {editingBasic
+                  ? <input type="date" className="form-input w-full" value={String(editForm.completion_date ?? '')} onChange={(e) => setEditForm({ ...editForm, completion_date: e.target.value })} />
+                  : fmtDate(project.completion_date)}
+              </InfoRow>
             </div>
 
-            {/* 金額情報 */}
-            <div className="detail-section">
-              <h3><span className="material-icons text-green-600" style={{ fontSize: 18 }}>payments</span> 金額情報</h3>
+            {/* ── 列3: 金額情報 ── */}
+            <div className="detail-section" style={{ padding: '1rem' }}>
+              <h3 style={{ marginBottom: '0.75rem' }}>
+                <span className="material-icons text-green-600" style={{ fontSize: 16 }}>payments</span> 金額情報
+              </h3>
               <InfoRow label="見積もり金額">
                 {editingBasic
                   ? <input type="number" className="form-input w-full" value={editForm.estimated_amount ?? 0} onChange={(e) => setEditForm({ ...editForm, estimated_amount: Number(e.target.value) })} />
@@ -500,7 +611,7 @@ export default function ProjectDetailPage() {
               </InfoRow>
               <InfoRow label="実行原価">
                 <span className="font-medium">{fmt(project.actual_cost)}</span>
-                <span className="text-xs text-gray-400 ml-1">（原価タブから自動集計）</span>
+                <span className="text-xs text-gray-400 ml-1">（原価タブ自動集計）</span>
               </InfoRow>
               <InfoRow label="粗利益">
                 <span className={`font-medium ${grossProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -514,21 +625,6 @@ export default function ProjectDetailPage() {
               </InfoRow>
             </div>
 
-            {/* メモ */}
-            <div className="detail-section">
-              <h3><span className="material-icons text-green-600" style={{ fontSize: 18 }}>notes</span> メモ・備考</h3>
-              {editingBasic ? (
-                <textarea
-                  className="form-input w-full"
-                  rows={5}
-                  value={String(editForm.notes ?? '')}
-                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-                  placeholder="自由記述..."
-                />
-              ) : (
-                <p className="text-sm whitespace-pre-wrap text-gray-700">{project.notes || '（なし）'}</p>
-              )}
-            </div>
           </div>
         </div>
       )}
