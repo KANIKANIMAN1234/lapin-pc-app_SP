@@ -1,188 +1,408 @@
 ﻿'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase';
+import type { ProjectStatus } from '@/types';
 
-interface FollowupItem {
+// 追客対象ステータス
+const FOLLOWUP_STATUSES: ProjectStatus[] = ['inquiry', 'estimate', 'followup_status'];
+
+const STATUS_LABEL: Record<string, string> = {
+  inquiry:         '問い合わせ',
+  estimate:        '見積もり',
+  followup_status: '追客中',
+  contract:        '契約',
+};
+const STATUS_COLOR: Record<string, string> = {
+  inquiry:         'bg-yellow-100 text-yellow-800 border-yellow-200',
+  estimate:        'bg-orange-100 text-orange-800 border-orange-200',
+  followup_status: 'bg-blue-100  text-blue-800  border-blue-200',
+};
+
+function daysSince(dateStr?: string | null): number | null {
+  if (!dateStr) return null;
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+}
+function fmtDate(d?: string | null) { return d ? String(d).substring(0, 10) : '-'; }
+function fmtYen(v?: number | null) {
+  if (v == null) return '-';
+  return v >= 10000 ? `${Math.floor(v / 10000).toLocaleString()}万円` : `${v.toLocaleString()}円`;
+}
+
+interface ProjectRow {
   id: string;
   project_number: string;
   customer_name: string;
+  address: string | null;
+  phone: string | null;
   status: string;
-  estimate_date?: string | null;
-  days_since_estimate?: number;
-  is_overdue?: boolean;
-  assigned_to_name?: string;
-  followup_flag: boolean;
-}
-
-function daysSince(dateStr?: string | null): number | undefined {
-  if (!dateStr) return undefined;
-  const diff = Date.now() - new Date(dateStr).getTime();
-  return Math.floor(diff / (1000 * 60 * 60 * 24));
-}
-
-function StatusBadge({ isOverdue, days }: { isOverdue?: boolean; days?: number }) {
-  if (isOverdue) return <span className="badge badge-red">期限超過</span>;
-  if (days !== undefined && days > 3) return <span className="badge badge-yellow">注意</span>;
-  return <span className="badge badge-green">余裕</span>;
+  work_type: string[] | null;
+  work_description: string | null;
+  estimated_amount: number | null;
+  inquiry_date: string | null;
+  contract_date: string | null;
+  notes: string | null;
+  assigned_to: string | null;
+  assigned_to_name: string | null;
+  latest_meeting_date: string | null;
+  days_since_inquiry: number | null;
+  days_since_meeting: number | null;
+  urgency: 'critical' | 'warning' | 'normal';
 }
 
 export default function FollowupPage() {
   const queryClient = useQueryClient();
-  const [filter, setFilter] = useState<'all' | 'overdue' | 'attention'>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [urgencyFilter, setUrgencyFilter] = useState<string>('all');
+  const [keyword, setKeyword] = useState('');
+  const [editStatusId, setEditStatusId] = useState<string | null>(null);
 
-  const { data: followups = [], isLoading } = useQuery({
-    queryKey: ['followups'],
-    queryFn: async () => {
+  // ── データ取得 ──────────────────────────────────────────
+  const { data: projects = [], isLoading } = useQuery({
+    queryKey: ['followup-projects'],
+    queryFn: async (): Promise<ProjectRow[]> => {
       const supabase = createClient();
-      const { data, error } = await supabase
+
+      // 追客対象の案件を取得
+      const { data: pj, error } = await supabase
         .from('t_projects')
         .select(`
-          id, project_number, customer_name, status,
-          estimate_date, followup_flag,
-          m_users!assigned_to(name)
+          id, project_number, customer_name, address, phone, status,
+          work_type, work_description, estimated_amount,
+          inquiry_date, contract_date, notes,
+          assigned_to, assigned_to_name
         `)
-        .eq('followup_flag', true)
-        .not('status', 'in', '(completed,lost)')
+        .in('status', FOLLOWUP_STATUSES)
         .is('deleted_at', null)
-        .order('estimate_date', { ascending: true, nullsFirst: false });
+        .order('inquiry_date', { ascending: false });
 
       if (error) throw error;
+      const pjList = pj ?? [];
 
-      return (data ?? []).map((p) => {
-        const days = daysSince(p.estimate_date);
-        const isOverdue = days !== undefined && days > 7;
+      // 最新商談日を一括取得
+      const ids = pjList.map((p) => p.id);
+      let meetingMap: Record<string, string> = {};
+      if (ids.length > 0) {
+        const { data: meetings } = await supabase
+          .from('t_meetings')
+          .select('project_id, meeting_date')
+          .in('project_id', ids)
+          .is('deleted_at', null)
+          .order('meeting_date', { ascending: false });
+        // 最新1件のみ保持
+        (meetings ?? []).forEach((m) => {
+          if (!meetingMap[m.project_id]) meetingMap[m.project_id] = m.meeting_date;
+        });
+      }
+
+      return pjList.map((p) => {
+        const dsi  = daysSince(p.inquiry_date);
+        const dsm  = daysSince(meetingMap[p.id] ?? null);
+        // 緊急度判定
+        const urgency: ProjectRow['urgency'] =
+          (dsi !== null && dsi > 30) || (dsm !== null && dsm > 21)
+            ? 'critical'
+            : (dsi !== null && dsi > 14) || (dsm !== null && dsm > 10)
+            ? 'warning'
+            : 'normal';
         return {
           ...p,
-          assigned_to_name: (p.m_users as unknown as { name: string } | null)?.name,
-          days_since_estimate: days,
-          is_overdue: isOverdue,
-        } as FollowupItem;
+          latest_meeting_date: meetingMap[p.id] ?? null,
+          days_since_inquiry:  dsi,
+          days_since_meeting:  dsm,
+          urgency,
+        } as ProjectRow;
       });
     },
   });
 
-  const doneMutation = useMutation({
-    mutationFn: async ({ id, action }: { id: string; action: 'done' | 'skip' }) => {
+  // ── ステータス更新 ──────────────────────────────────────
+  const updateStatus = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const supabase = createClient();
-      const updates =
-        action === 'done'
-          ? { followup_flag: false, status: 'contract' }
-          : { followup_flag: false };
-      const { error } = await supabase.from('t_projects').update(updates).eq('id', id);
+      const { error } = await supabase.from('t_projects').update({ status }).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['followups'] });
+      queryClient.invalidateQueries({ queryKey: ['followup-projects'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      setEditStatusId(null);
     },
   });
 
-  const filtered = followups.filter((f) => {
-    if (filter === 'overdue') return f.is_overdue;
-    if (filter === 'attention') return !f.is_overdue && (f.days_since_estimate ?? 0) > 3;
-    return true;
-  });
+  // ── フィルタ ────────────────────────────────────────────
+  const filtered = useMemo(() => {
+    return projects.filter((p) => {
+      if (statusFilter !== 'all' && p.status !== statusFilter) return false;
+      if (urgencyFilter === 'critical' && p.urgency !== 'critical') return false;
+      if (urgencyFilter === 'warning' && p.urgency !== 'warning') return false;
+      if (keyword) {
+        const kw = keyword.toLowerCase();
+        return (
+          p.customer_name?.toLowerCase().includes(kw) ||
+          p.project_number?.toLowerCase().includes(kw) ||
+          p.address?.toLowerCase().includes(kw) ||
+          false
+        );
+      }
+      return true;
+    });
+  }, [projects, statusFilter, urgencyFilter, keyword]);
 
-  const overdueCount = followups.filter((f) => f.is_overdue).length;
+  const criticalCount = projects.filter((p) => p.urgency === 'critical').length;
+  const warningCount  = projects.filter((p) => p.urgency === 'warning').length;
+
+  // ── ステータス別件数 ──────────────────────────────────
+  const statusCount = Object.fromEntries(
+    FOLLOWUP_STATUSES.map((s) => [s, projects.filter((p) => p.status === s).length])
+  );
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="spinner" />
-        <p className="ml-3 text-gray-500">読み込み中...</p>
+        <div className="spinner" /><p className="ml-3 text-gray-500">読み込み中...</p>
       </div>
     );
   }
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <h2 className="text-xl font-bold">追客管理（{followups.length}件）</h2>
-        <div className="flex items-center gap-4 flex-wrap">
-          <span className="text-sm text-gray-600 flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
-            期限超過: <strong className="text-red-600">{overdueCount}件</strong>
-          </span>
-          <div className="flex gap-1">
-            {(['all', 'overdue', 'attention'] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                  filter === f
-                    ? 'bg-green-600 text-white border-green-600'
-                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                }`}
-              >
-                {f === 'all' ? '全て' : f === 'overdue' ? '期限超過' : '要注意'}
-              </button>
-            ))}
+      {/* ── ヘッダー ── */}
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold">追客管理</h2>
+        <Link href="/projects/new" className="btn-primary text-sm">
+          <span className="material-icons" style={{ fontSize: 16 }}>add</span>新規案件
+        </Link>
+      </div>
+
+      {/* ── サマリカード ── */}
+      <div className="grid grid-cols-5 gap-3 mb-4">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 text-center">
+          <div className="text-2xl font-bold text-gray-800">{projects.length}</div>
+          <div className="text-xs text-gray-500 mt-0.5">追客中合計</div>
+        </div>
+        {FOLLOWUP_STATUSES.map((s) => (
+          <div key={s} className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 text-center cursor-pointer hover:shadow-md transition"
+            onClick={() => setStatusFilter(statusFilter === s ? 'all' : s)}>
+            <div className="text-2xl font-bold text-gray-800">{statusCount[s] ?? 0}</div>
+            <div className="text-xs text-gray-500 mt-0.5">{STATUS_LABEL[s]}</div>
           </div>
+        ))}
+        <div className="bg-red-50 rounded-xl border border-red-100 shadow-sm p-3 text-center cursor-pointer hover:shadow-md transition"
+          onClick={() => setUrgencyFilter(urgencyFilter === 'critical' ? 'all' : 'critical')}>
+          <div className="text-2xl font-bold text-red-600">{criticalCount}</div>
+          <div className="text-xs text-red-500 mt-0.5">要緊急対応</div>
+        </div>
+        <div className="bg-yellow-50 rounded-xl border border-yellow-100 shadow-sm p-3 text-center cursor-pointer hover:shadow-md transition"
+          onClick={() => setUrgencyFilter(urgencyFilter === 'warning' ? 'all' : 'warning')}>
+          <div className="text-2xl font-bold text-yellow-600">{warningCount}</div>
+          <div className="text-xs text-yellow-600 mt-0.5">要注意</div>
         </div>
       </div>
 
-      <div className="space-y-3">
-        {filtered.map((item) => (
-          <div
-            key={item.id}
-            className={`bg-white rounded-xl border p-4 shadow-sm ${
-              item.is_overdue ? 'border-red-200 bg-red-50' : 'border-gray-100'
-            }`}
-          >
-            <div className="flex flex-wrap justify-between gap-4 items-start">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className="font-bold text-gray-800">
-                    {item.customer_name} / {item.project_number}
-                  </span>
-                  <StatusBadge isOverdue={item.is_overdue} days={item.days_since_estimate} />
-                  {item.days_since_estimate !== undefined && (
-                    <span className="text-sm text-gray-500">
-                      {item.is_overdue
-                        ? `${item.days_since_estimate}日超過`
-                        : `${item.days_since_estimate}日経過`}
-                    </span>
-                  )}
-                </div>
-                {item.estimate_date && (
-                  <p className="text-sm text-gray-500">
-                    見積もり日: {item.estimate_date.substring(0, 10)}
-                  </p>
-                )}
-                {item.assigned_to_name && (
-                  <p className="text-sm text-gray-500">担当: {item.assigned_to_name}</p>
-                )}
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  className="btn-primary text-sm py-1.5 px-4"
-                  disabled={doneMutation.isPending}
-                  onClick={() => doneMutation.mutate({ id: item.id, action: 'done' })}
-                >
-                  対応済み
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary text-sm py-1.5 px-4"
-                  disabled={doneMutation.isPending}
-                  onClick={() => doneMutation.mutate({ id: item.id, action: 'skip' })}
-                >
-                  スキップ
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
+      {/* ── フィルタ行 ── */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 mb-4 flex flex-wrap items-center gap-3">
+        {/* キーワード */}
+        <input
+          type="text"
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          placeholder="顧客名・住所・案件番号"
+          className="form-input text-sm"
+          style={{ width: 220 }}
+        />
+        {/* ステータス */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs text-gray-500 font-medium">ステータス:</span>
+          {([['all', '全て'], ...FOLLOWUP_STATUSES.map((s) => [s, STATUS_LABEL[s]])] as [string, string][]).map(([v, l]) => (
+            <button key={v} onClick={() => setStatusFilter(v)}
+              className={`px-2.5 py-0.5 text-xs rounded-full border transition ${statusFilter === v ? 'bg-green-600 text-white border-green-600' : 'bg-white text-gray-600 border-gray-200'}`}>
+              {l}
+            </button>
+          ))}
+        </div>
+        {/* 緊急度 */}
+        <div className="flex items-center gap-1.5 ml-auto">
+          <span className="text-xs text-gray-500 font-medium">緊急度:</span>
+          {([['all', '全て', ''], ['critical', '緊急', 'text-red-600'], ['warning', '要注意', 'text-yellow-600'], ['normal', '通常', 'text-green-600']] as [string, string, string][]).map(([v, l, tc]) => (
+            <button key={v} onClick={() => setUrgencyFilter(v)}
+              className={`px-2.5 py-0.5 text-xs rounded-full border transition ${urgencyFilter === v ? 'bg-green-600 text-white border-green-600' : `bg-white border-gray-200 ${tc}`}`}>
+              {l}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {filtered.length === 0 && (
-        <div className="text-center py-12 text-gray-500 bg-white rounded-xl shadow-sm">
-          <span className="material-icons text-5xl mb-2 block" style={{ color: '#d1d5db' }}>
-            check_circle
-          </span>
-          <p>対応が必要な追客はありません</p>
+      {/* ── 件数 ── */}
+      <div className="text-sm text-gray-500 mb-3">{filtered.length}件表示中</div>
+
+      {/* ── カード一覧 ── */}
+      {filtered.length === 0 ? (
+        <div className="text-center py-16 bg-white rounded-xl border border-gray-100 shadow-sm">
+          <span className="material-icons text-5xl mb-2 block" style={{ color: '#d1d5db' }}>check_circle</span>
+          <p className="text-gray-400">該当する追客案件はありません</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((item) => {
+            const urgencyStyle =
+              item.urgency === 'critical' ? 'border-red-200 bg-red-50/40'
+              : item.urgency === 'warning' ? 'border-yellow-200 bg-yellow-50/30'
+              : 'border-gray-100 bg-white';
+            const urgencyBadge =
+              item.urgency === 'critical'
+                ? <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-500 text-white">緊急</span>
+                : item.urgency === 'warning'
+                ? <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-yellow-400 text-white">要注意</span>
+                : <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-green-100 text-green-700">通常</span>;
+
+            return (
+              <div key={item.id} className={`rounded-xl border shadow-sm ${urgencyStyle}`}>
+                {/* カードヘッダー */}
+                <div className="flex items-start justify-between gap-4 px-4 py-3 border-b border-gray-100/60">
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    {/* ステータスバッジ（クリックで変更可能） */}
+                    {editStatusId === item.id ? (
+                      <select
+                        autoFocus
+                        className="form-input text-xs py-0.5"
+                        defaultValue={item.status}
+                        onBlur={() => setEditStatusId(null)}
+                        onChange={(e) => updateStatus.mutate({ id: item.id, status: e.target.value })}
+                      >
+                        {(['inquiry', 'estimate', 'followup_status', 'contract', 'lost'] as const).map((s) => (
+                          <option key={s} value={s}>{STATUS_LABEL[s] ?? s}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <button
+                        className={`px-2 py-0.5 text-xs font-bold rounded border cursor-pointer hover:opacity-80 transition ${STATUS_COLOR[item.status] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}
+                        onClick={() => setEditStatusId(item.id)}
+                        title="クリックでステータス変更"
+                      >
+                        {STATUS_LABEL[item.status] ?? item.status} ▾
+                      </button>
+                    )}
+                    {urgencyBadge}
+                    <span className="font-bold text-gray-800 text-sm truncate">{item.customer_name}</span>
+                    <span className="text-xs text-gray-400 font-mono">{item.project_number}</span>
+                  </div>
+                  <Link href={`/projects/${item.id}`}
+                    className="shrink-0 flex items-center gap-1 text-xs text-green-600 hover:text-green-800 hover:underline font-medium">
+                    詳細<span className="material-icons" style={{ fontSize: 14 }}>open_in_new</span>
+                  </Link>
+                </div>
+
+                {/* カードボディ */}
+                <div className="px-4 py-3 grid grid-cols-2 gap-x-6 gap-y-1.5">
+                  {/* 左列 */}
+                  <div className="space-y-1.5">
+                    {item.address && (
+                      <div className="flex items-start gap-1.5 text-xs text-gray-600">
+                        <span className="material-icons text-gray-400 shrink-0" style={{ fontSize: 13, marginTop: 1 }}>location_on</span>
+                        {item.address}
+                      </div>
+                    )}
+                    {item.phone && (
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <span className="material-icons text-gray-400 shrink-0" style={{ fontSize: 13 }}>phone</span>
+                        <a href={`tel:${item.phone}`} className="text-green-600 hover:underline">{item.phone}</a>
+                      </div>
+                    )}
+                    {(item.work_type ?? []).length > 0 && (
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <span className="material-icons text-gray-400 shrink-0" style={{ fontSize: 13 }}>construction</span>
+                        {(item.work_type ?? []).map((w) => (
+                          <span key={w} className="px-1.5 py-0 text-[11px] bg-green-50 text-green-700 rounded font-medium">{w}</span>
+                        ))}
+                      </div>
+                    )}
+                    {item.work_description && (
+                      <div className="text-xs text-gray-500 pl-4">{item.work_description}</div>
+                    )}
+                  </div>
+
+                  {/* 右列 */}
+                  <div className="space-y-1.5">
+                    {item.assigned_to_name && (
+                      <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                        <span className="material-icons text-gray-400" style={{ fontSize: 13 }}>person</span>
+                        担当: <span className="font-medium">{item.assigned_to_name}</span>
+                      </div>
+                    )}
+                    {item.estimated_amount != null && item.estimated_amount > 0 && (
+                      <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                        <span className="material-icons text-gray-400" style={{ fontSize: 13 }}>payments</span>
+                        見積: <span className="font-bold text-gray-800">{fmtYen(item.estimated_amount)}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                      <span className="material-icons text-gray-400" style={{ fontSize: 13 }}>event</span>
+                      問合わせ日: {fmtDate(item.inquiry_date)}
+                      {item.days_since_inquiry !== null && (
+                        <span className={`ml-1 font-bold ${item.days_since_inquiry > 30 ? 'text-red-600' : item.days_since_inquiry > 14 ? 'text-yellow-600' : 'text-gray-500'}`}>
+                          ({item.days_since_inquiry}日前)
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                      <span className="material-icons text-gray-400" style={{ fontSize: 13 }}>forum</span>
+                      最終商談: {item.latest_meeting_date ? fmtDate(item.latest_meeting_date) : '—'}
+                      {item.days_since_meeting !== null && (
+                        <span className={`ml-1 font-bold ${item.days_since_meeting > 21 ? 'text-red-600' : item.days_since_meeting > 10 ? 'text-yellow-600' : 'text-gray-500'}`}>
+                          ({item.days_since_meeting}日前)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* メモ（あれば表示） */}
+                {item.notes && (
+                  <div className="px-4 pb-3">
+                    <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 line-clamp-2">
+                      <span className="material-icons text-gray-300 align-middle mr-1" style={{ fontSize: 12 }}>notes</span>
+                      {item.notes}
+                    </div>
+                  </div>
+                )}
+
+                {/* フッター: クイックアクション */}
+                <div className="px-4 py-2 border-t border-gray-100/60 flex items-center justify-between gap-2 bg-gray-50/60 rounded-b-xl">
+                  <div className="flex items-center gap-2">
+                    <Link href={`/projects/${item.id}`}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 hover:bg-gray-100 inline-flex items-center gap-1 transition">
+                      <span className="material-icons" style={{ fontSize: 13 }}>forum</span>商談記録
+                    </Link>
+                    <button
+                      className="text-xs px-3 py-1.5 rounded-lg bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 inline-flex items-center gap-1 transition"
+                      onClick={() => setEditStatusId(item.id)}
+                    >
+                      <span className="material-icons" style={{ fontSize: 13 }}>edit</span>状態変更
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="text-xs px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 inline-flex items-center gap-1 transition"
+                      disabled={updateStatus.isPending}
+                      onClick={() => updateStatus.mutate({ id: item.id, status: 'contract' })}
+                    >
+                      <span className="material-icons" style={{ fontSize: 13 }}>check_circle</span>契約済みに変更
+                    </button>
+                    <button
+                      className="text-xs px-3 py-1.5 rounded-lg bg-gray-200 text-gray-600 hover:bg-gray-300 inline-flex items-center gap-1 transition"
+                      disabled={updateStatus.isPending}
+                      onClick={() => updateStatus.mutate({ id: item.id, status: 'lost' })}
+                    >
+                      <span className="material-icons" style={{ fontSize: 13 }}>cancel</span>失注
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
