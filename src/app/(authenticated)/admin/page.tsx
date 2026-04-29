@@ -79,12 +79,14 @@ export default function AdminPage() {
 
   const fetchEmployees = useCallback(async () => {
     setEmpLoading(true);
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from('m_users')
-      .select('id, name, email, role, phone, line_user_id, status, can_register_project, created_at')
-      .order('created_at', { ascending: true });
-    if (!error && data) setEmployees(data as EmployeeRow[]);
+    try {
+      // RLSをバイパスしてサービスロールで全ユーザーを取得
+      const res = await fetch('/api/admin/users');
+      const json = await res.json() as { users?: EmployeeRow[]; error?: string };
+      if (json.users) setEmployees(json.users);
+    } catch (e) {
+      console.error('[fetchEmployees]', e);
+    }
     setEmpLoading(false);
   }, []);
 
@@ -96,17 +98,15 @@ export default function AdminPage() {
     e.preventDefault();
     if (!regName.trim()) return;
     setSubmitting(true);
-    const supabase = createClient();
-    const { error } = await supabase.from('m_users').insert({
-      name: regName.trim(),
-      role: regRole,
-      email: regEmail || null,
-      phone: regPhone || null,
-      status: 'active',
+    const res = await fetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: regName.trim(), role: regRole, email: regEmail || null, phone: regPhone || null, status: 'active' }),
     });
+    const json = await res.json() as { error?: string };
     setSubmitting(false);
-    if (error) {
-      showToast('登録に失敗しました: ' + error.message, 'error');
+    if (json.error) {
+      showToast('登録に失敗しました: ' + json.error, 'error');
     } else {
       showToast(`${regName} さんを登録しました`);
       setShowRegModal(false);
@@ -123,16 +123,23 @@ export default function AdminPage() {
     setShowEditModal(true);
   };
 
-  // SP新規登録権限のインライントグル（テーブル行から即時変更）
+  // APIルート経由でユーザーを更新（RLSバイパス）
+  const patchUser = async (id: string, updates: Record<string, unknown>) => {
+    const res = await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, ...updates }),
+    });
+    const json = await res.json() as { error?: string };
+    return json.error ?? null;
+  };
+
+  // SP新規登録権限のインライントグル
   const handleToggleRegisterProject = async (emp: EmployeeRow) => {
-    if (emp.role === 'admin') return; // admin は常にtrue（変更不要）
+    if (emp.role === 'admin') return;
     const newVal = !emp.can_register_project;
-    const supabase = createClient();
-    const { error } = await supabase
-      .from('m_users')
-      .update({ can_register_project: newVal })
-      .eq('id', emp.id);
-    if (error) showToast('権限の更新に失敗しました', 'error');
+    const err = await patchUser(emp.id, { can_register_project: newVal });
+    if (err) showToast('権限の更新に失敗しました', 'error');
     else { showToast(`${emp.name} さんのSP新規登録権限を${newVal ? 'ON' : 'OFF'}にしました`); fetchEmployees(); }
   };
 
@@ -140,15 +147,14 @@ export default function AdminPage() {
     e.preventDefault();
     if (!editTarget) return;
     setSubmitting(true);
-    const supabase = createClient();
-    const { error } = await supabase.from('m_users').update({
+    const err = await patchUser(editTarget.id, {
       name: editName, role: editRole,
       email: editEmail || null, phone: editPhone || null,
       can_register_project: editRole === 'admin' ? true : editCanRegister,
-    }).eq('id', editTarget.id);
+    });
     setSubmitting(false);
-    if (error) {
-      showToast('更新に失敗しました: ' + error.message, 'error');
+    if (err) {
+      showToast('更新に失敗しました: ' + err, 'error');
     } else {
       showToast(`${editName} さんの情報を更新しました`);
       setShowEditModal(false);
@@ -159,11 +165,10 @@ export default function AdminPage() {
   const handleRetire = async () => {
     if (!retireTarget) return;
     setSubmitting(true);
-    const supabase = createClient();
-    const { error } = await supabase.from('m_users').update({ status: 'retired' }).eq('id', retireTarget.id);
+    const err = await patchUser(retireTarget.id, { status: 'retired' });
     setSubmitting(false);
-    if (error) {
-      showToast('退職処理に失敗しました: ' + error.message, 'error');
+    if (err) {
+      showToast('退職処理に失敗しました: ' + err, 'error');
     } else {
       showToast(`${retireTarget.name} さんの退職処理が完了しました`);
       setShowRetireModal(false);
@@ -173,9 +178,8 @@ export default function AdminPage() {
 
   const handleRestore = async (emp: EmployeeRow) => {
     if (!confirm(`${emp.name} さんを復職させますか？`)) return;
-    const supabase = createClient();
-    const { error } = await supabase.from('m_users').update({ status: 'active' }).eq('id', emp.id);
-    if (error) showToast('復職処理に失敗しました', 'error');
+    const err = await patchUser(emp.id, { status: 'active' });
+    if (err) showToast('復職処理に失敗しました', 'error');
     else { showToast(`${emp.name} さんを復職させました`); fetchEmployees(); }
   };
 
