@@ -65,21 +65,25 @@ export default function FollowupPage() {
     queryFn: async (): Promise<ProjectRow[]> => {
       const supabase = createClient();
 
-      // 追客対象の案件を取得
+      // 追客対象の案件を取得（m_users を JOIN して担当者名を取得）
       const { data: pj, error } = await supabase
         .from('t_projects')
         .select(`
           id, project_number, customer_name, address, phone, status,
           work_type, work_description, estimated_amount,
           inquiry_date, contract_date, notes,
-          assigned_to, assigned_to_name
+          assigned_to,
+          m_users!assigned_to(name)
         `)
         .in('status', FOLLOWUP_STATUSES)
         .is('deleted_at', null)
         .order('inquiry_date', { ascending: false });
 
       if (error) throw error;
-      const pjList = pj ?? [];
+      const pjList = (pj ?? []).map((p) => ({
+        ...p,
+        assigned_to_name: (p.m_users as unknown as { name: string } | null)?.name ?? null,
+      }));
 
       // 最新商談日を一括取得
       const ids = pjList.map((p) => p.id);
