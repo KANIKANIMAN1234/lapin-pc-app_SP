@@ -241,7 +241,20 @@ export default function ProjectsPage() {
                   <tr key={project.id}>
                     <td className="font-mono text-xs">{project.project_number}</td>
                     <td className="font-medium">{project.customer_name}</td>
-                    <td className="text-gray-500 text-xs">{project.address}</td>
+                    <td className="text-gray-500 text-xs">
+                      {project.lat && project.lng ? (
+                        <Link
+                          href={`/map?focus=${project.id}`}
+                          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline group"
+                          title="顧客マップで表示"
+                        >
+                          <span className="material-icons text-[13px] text-blue-400 group-hover:text-blue-600">location_on</span>
+                          {project.address}
+                        </Link>
+                      ) : (
+                        <span className="text-gray-400">{project.address}</span>
+                      )}
+                    </td>
                     <td>
                       <div className="flex flex-wrap gap-1">
                         {project.work_type.slice(0, 2).map((wt) => (
