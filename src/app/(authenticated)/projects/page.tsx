@@ -51,6 +51,7 @@ export default function ProjectsPage() {
   const updateProject = useUpdateProject();
   const [keyword, setKeyword] = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState<ProjectStatus[]>([]);
+  const [selectedWorkTypes, setSelectedWorkTypes] = useState<string[]>([]);
   // 営業担当は初期状態で自分の案件のみ表示
   const [myOnly, setMyOnly] = useState(isSales);
   const [sortKey, setSortKey] = useState<'inquiry_date' | 'contract_amount' | 'status'>('inquiry_date');
@@ -74,29 +75,36 @@ export default function ProjectsPage() {
     setUpdatingId(null);
   };
 
-  // m_settings からステータス一覧を取得
+  // m_settings からステータス一覧・工事種別一覧を取得
   const [statusList, setStatusList] = useState(DEFAULT_STATUS_LIST);
+  const DEFAULT_WORK_TYPE_LIST = ['外壁塗装', '屋根塗装', '防水工事', '内装工事', 'リフォーム', 'その他'];
+  const [workTypeList, setWorkTypeList] = useState<string[]>(DEFAULT_WORK_TYPE_LIST);
 
   useEffect(() => {
     const supabase = createClient();
     supabase
       .from('m_settings')
-      .select('value')
-      .eq('key', 'project_status_options')
-      .single()
+      .select('key, value')
+      .in('key', ['project_status_options', 'work_type_options'])
       .then(({ data }) => {
-        if (!data?.value) return;
-        try {
-          // 保存形式: ["inquiry:問い合わせ", "estimate:見積もり", ...]
-          const parsed: string[] = JSON.parse(data.value);
-          if (!Array.isArray(parsed) || parsed.length === 0) return;
-          const list = parsed.map((item) => {
-            const idx = item.indexOf(':');
-            if (idx === -1) return { value: item as ProjectStatus, label: item };
-            return { value: item.slice(0, idx) as ProjectStatus, label: item.slice(idx + 1) };
-          });
-          setStatusList(list);
-        } catch { /* パース失敗時はデフォルト値を維持 */ }
+        if (!data) return;
+        data.forEach((row) => {
+          try {
+            const parsed: string[] = JSON.parse(row.value);
+            if (!Array.isArray(parsed) || parsed.length === 0) return;
+            if (row.key === 'project_status_options') {
+              const list = parsed.map((item) => {
+                const idx = item.indexOf(':');
+                if (idx === -1) return { value: item as ProjectStatus, label: item };
+                return { value: item.slice(0, idx) as ProjectStatus, label: item.slice(idx + 1) };
+              });
+              setStatusList(list);
+            }
+            if (row.key === 'work_type_options') {
+              setWorkTypeList(parsed);
+            }
+          } catch { /* パース失敗時はデフォルト値を維持 */ }
+        });
       });
   }, []);
 
@@ -112,10 +120,23 @@ export default function ProjectsPage() {
     );
   };
 
+  const toggleWorkType = (wt: string) => {
+    setSelectedWorkTypes((prev) =>
+      prev.includes(wt) ? prev.filter((x) => x !== wt) : [...prev, wt]
+    );
+  };
+
   const statusOrder = statusList.map((s) => s.value);
   const statusLabelMap = Object.fromEntries(statusList.map((s) => [s.value, s.label]));
 
-  const sorted = [...(projects ?? [])].sort((a, b) => {
+  // 工事種別フィルタ（クライアント側）
+  const filtered = selectedWorkTypes.length === 0
+    ? (projects ?? [])
+    : (projects ?? []).filter((p) =>
+        selectedWorkTypes.some((wt) => (p.work_type ?? []).includes(wt))
+      );
+
+  const sorted = [...filtered].sort((a, b) => {
     let cmp = 0;
     if (sortKey === 'inquiry_date') cmp = a.inquiry_date.localeCompare(b.inquiry_date);
     else if (sortKey === 'contract_amount') cmp = (a.contract_amount ?? 0) - (b.contract_amount ?? 0);
@@ -149,7 +170,8 @@ export default function ProjectsPage() {
       {/* 検索・フィルタ */}
       <div className="search-panel">
         <div className="search-row">
-          <div className="search-field" style={{ flexBasis: '300px' }}>
+          {/* キーワード（短め） */}
+          <div className="search-field" style={{ flexBasis: '180px', flexShrink: 0 }}>
             <label>キーワード</label>
             <input
               type="text"
@@ -159,6 +181,8 @@ export default function ProjectsPage() {
               className="form-input"
             />
           </div>
+
+          {/* ステータス */}
           <div className="search-field">
             <label>ステータス</label>
             <div className="flex flex-wrap gap-1 mt-1">
@@ -177,9 +201,30 @@ export default function ProjectsPage() {
               ))}
             </div>
           </div>
+
+          {/* 工事種別 */}
+          <div className="search-field">
+            <label>工事種別</label>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {workTypeList.map((wt) => (
+                <button
+                  key={wt}
+                  onClick={() => toggleWorkType(wt)}
+                  className={`px-2 py-0.5 text-xs rounded-full border transition ${
+                    selectedWorkTypes.includes(wt)
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-600 border-gray-200'
+                  }`}
+                >
+                  {wt}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* 管理者のみ「自分の担当のみ」チェックボックスを表示（営業担当は常に自分の案件のみ） */}
           {isAdmin && (
-            <div className="search-field" style={{ flexBasis: 'auto', flexGrow: 0 }}>
+            <div className="search-field" style={{ flexBasis: 'auto', flexShrink: 0 }}>
               <label>絞り込み</label>
               <label className="flex items-center gap-1.5 mt-1 cursor-pointer text-sm">
                 <input
@@ -195,7 +240,7 @@ export default function ProjectsPage() {
           )}
           {/* 営業担当：自分の案件のみ表示中であることを示すバッジ */}
           {isSales && (
-            <div className="search-field" style={{ flexBasis: 'auto', flexGrow: 0 }}>
+            <div className="search-field" style={{ flexBasis: 'auto', flexShrink: 0 }}>
               <label>絞り込み</label>
               <span className="inline-flex items-center gap-1 mt-1 px-2 py-1 bg-green-50 border border-green-200 text-green-700 text-xs rounded-lg font-medium">
                 <span className="material-icons" style={{ fontSize: 13 }}>person</span>
