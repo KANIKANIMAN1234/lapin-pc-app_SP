@@ -80,12 +80,17 @@ export default function AdminPage() {
   const fetchEmployees = useCallback(async () => {
     setEmpLoading(true);
     try {
-      // RLSをバイパスしてサービスロールで全ユーザーを取得
       const res = await fetch('/api/admin/users');
       const json = await res.json() as { users?: EmployeeRow[]; error?: string };
-      if (json.users) setEmployees(json.users);
+      if (json.error) {
+        console.error('[fetchEmployees] API error:', json.error);
+        showToast('従業員一覧の取得に失敗: ' + json.error, 'error');
+      } else {
+        setEmployees(json.users ?? []);
+      }
     } catch (e) {
       console.error('[fetchEmployees]', e);
+      showToast('従業員一覧の取得に失敗しました', 'error');
     }
     setEmpLoading(false);
   }, []);
