@@ -45,7 +45,7 @@ export async function GET() {
     return NextResponse.json({ error: pjErr.message }, { status: 500 });
   }
 
-  const pjList = (pjRaw ?? []) as PjRow[];
+  const pjList = (pjRaw ?? []) as unknown as PjRow[];
   if (pjList.length === 0) {
     return NextResponse.json({ projects: [] });
   }
