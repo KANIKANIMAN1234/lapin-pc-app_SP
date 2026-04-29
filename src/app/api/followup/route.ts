@@ -3,6 +3,22 @@ import { createClient } from '@supabase/supabase-js';
 
 const FOLLOWUP_STATUSES = ['inquiry', 'estimate', 'followup_status'];
 
+interface PjRow {
+  id: string;
+  project_number: string;
+  customer_name: string;
+  address: string | null;
+  phone: string | null;
+  status: string;
+  work_type: string[] | null;
+  work_description: string | null;
+  estimated_amount: number | null;
+  inquiry_date: string | null;
+  contract_date: string | null;
+  notes: string | null;
+  assigned_to: string | null;
+}
+
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
@@ -29,13 +45,13 @@ export async function GET() {
     return NextResponse.json({ error: pjErr.message }, { status: 500 });
   }
 
-  const pjList = pjRaw ?? [];
+  const pjList = (pjRaw ?? []) as PjRow[];
   if (pjList.length === 0) {
     return NextResponse.json({ projects: [] });
   }
 
   // ② 担当者名を m_users から取得
-  const assignedIds = [...new Set(pjList.map((p) => p.assigned_to).filter(Boolean))] as string[];
+  const assignedIds = [...new Set(pjList.map((p) => p.assigned_to).filter((v): v is string => !!v))];
   let userNameMap: Record<string, string> = {};
   if (assignedIds.length > 0) {
     const { data: users } = await supabase
