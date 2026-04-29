@@ -78,13 +78,12 @@ export default function FollowupPage() {
   const [editStatusId, setEditStatusId] = useState<string | null>(null);
 
   // ── データ取得（サービスロールAPIルート経由でRLSバイパス） ────
-  const { data: projects = [], isLoading } = useQuery({
+  const { data: projects = [], isLoading, error: fetchError } = useQuery({
     queryKey: ['followup-projects'],
     queryFn: async (): Promise<ProjectRow[]> => {
       const res = await fetch('/api/followup');
-      if (!res.ok) throw new Error('追客データの取得に失敗しました');
       const json = await res.json() as { projects?: ApiProjectRow[]; error?: string };
-      if (json.error) throw new Error(json.error);
+      if (!res.ok || json.error) throw new Error(json.error ?? '追客データの取得に失敗しました');
 
       return (json.projects ?? []).map((p) => {
         const dsi = daysSince(p.inquiry_date);
@@ -154,6 +153,16 @@ export default function FollowupPage() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="spinner" /><p className="ml-3 text-gray-500">読み込み中...</p>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="text-center py-16">
+        <span className="material-icons text-5xl mb-2 block text-red-300">error_outline</span>
+        <p className="text-red-500 font-medium">データ取得エラー</p>
+        <p className="text-sm text-gray-400 mt-1">{String(fetchError)}</p>
       </div>
     );
   }
