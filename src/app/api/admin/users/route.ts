@@ -7,16 +7,35 @@ export async function GET() {
 
   const supabase = createClient(supabaseUrl, serviceKey);
 
+  // まず基本カラムで取得。can_register_project は後で個別に試みる
   const { data, error } = await supabase
     .from('m_users')
-    .select('id, name, email, role, phone, line_user_id, status, can_register_project, created_at')
+    .select('id, name, email, role, phone, line_user_id, status, created_at')
     .order('created_at', { ascending: true });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ users: data ?? [] });
+  // can_register_project カラムが存在するか確認してから追加
+  let canRegisterMap: Record<string, boolean> = {};
+  try {
+    const { data: crData } = await supabase
+      .from('m_users')
+      .select('id, can_register_project');
+    (crData ?? []).forEach((r: { id: string; can_register_project?: boolean }) => {
+      canRegisterMap[r.id] = r.can_register_project ?? false;
+    });
+  } catch {
+    // カラムが存在しない場合は全員 false
+  }
+
+  const users = (data ?? []).map((u) => ({
+    ...u,
+    can_register_project: canRegisterMap[u.id] ?? false,
+  }));
+
+  return NextResponse.json({ users });
 }
 
 export async function PATCH(req: Request) {
