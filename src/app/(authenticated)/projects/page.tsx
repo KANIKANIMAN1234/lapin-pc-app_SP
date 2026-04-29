@@ -159,94 +159,82 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold">案件一覧</h2>
-        <Link href="/projects/new" className="btn-primary">
+      {/* ── 1行目: タイトル + キーワード + 新規案件 ────────────────── */}
+      <div className="flex items-center gap-3 mb-3">
+        <h2 className="text-xl font-bold whitespace-nowrap">案件一覧</h2>
+        <div className="flex-1">
+          <input
+            type="text"
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            placeholder="顧客名・住所・案件番号"
+            className="form-input w-full"
+          />
+        </div>
+        <Link href="/projects/new" className="btn-primary whitespace-nowrap">
           <span className="material-icons" style={{ fontSize: 18 }}>add</span>
           新規案件
         </Link>
       </div>
 
-      {/* 検索・フィルタ */}
-      <div className="search-panel">
-        <div className="search-row">
-          {/* キーワード（短め） */}
-          <div className="search-field" style={{ flexBasis: '180px', flexShrink: 0 }}>
-            <label>キーワード</label>
-            <input
-              type="text"
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              placeholder="顧客名・住所・案件番号"
-              className="form-input"
-            />
-          </div>
-
+      {/* ── 2行目: フィルタ ─────────────────────────────────────── */}
+      <div className="search-panel mb-3">
+        <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
           {/* ステータス */}
-          <div className="search-field">
-            <label>ステータス</label>
-            <div className="flex flex-wrap gap-1 mt-1">
-              {statusList.map(({ value, label }) => (
-                <button
-                  key={value}
-                  onClick={() => toggleStatus(value)}
-                  className={`px-2 py-0.5 text-xs rounded-full border transition ${
-                    selectedStatuses.includes(value)
-                      ? 'bg-green-600 text-white border-green-600'
-                      : 'bg-white text-gray-600 border-gray-200'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+          <div className="flex items-center gap-1 flex-wrap">
+            <span className="text-xs text-gray-500 font-medium whitespace-nowrap">ステータス</span>
+            {statusList.map(({ value, label }) => (
+              <button
+                key={value}
+                onClick={() => toggleStatus(value)}
+                className={`px-2 py-0.5 text-xs rounded-full border transition ${
+                  selectedStatuses.includes(value)
+                    ? 'bg-green-600 text-white border-green-600'
+                    : 'bg-white text-gray-600 border-gray-200'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
           {/* 工事種別 */}
-          <div className="search-field">
-            <label>工事種別</label>
-            <div className="flex flex-wrap gap-1 mt-1">
-              {workTypeList.map((wt) => (
-                <button
-                  key={wt}
-                  onClick={() => toggleWorkType(wt)}
-                  className={`px-2 py-0.5 text-xs rounded-full border transition ${
-                    selectedWorkTypes.includes(wt)
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-gray-600 border-gray-200'
-                  }`}
-                >
-                  {wt}
-                </button>
-              ))}
-            </div>
+          <div className="flex items-center gap-1 flex-wrap">
+            <span className="text-xs text-gray-500 font-medium whitespace-nowrap">工事種別</span>
+            {workTypeList.map((wt) => (
+              <button
+                key={wt}
+                onClick={() => toggleWorkType(wt)}
+                className={`px-2 py-0.5 text-xs rounded-full border transition ${
+                  selectedWorkTypes.includes(wt)
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-600 border-gray-200'
+                }`}
+              >
+                {wt}
+              </button>
+            ))}
           </div>
 
-          {/* 管理者のみ「自分の担当のみ」チェックボックスを表示（営業担当は常に自分の案件のみ） */}
+          {/* 管理者のみ「自分の担当のみ」チェックボックス */}
           {isAdmin && (
-            <div className="search-field" style={{ flexBasis: 'auto', flexShrink: 0 }}>
-              <label>絞り込み</label>
-              <label className="flex items-center gap-1.5 mt-1 cursor-pointer text-sm">
-                <input
-                  type="checkbox"
-                  checked={myOnly}
-                  onChange={(e) => setMyOnly(e.target.checked)}
-                  className="rounded"
-                  style={{ accentColor: '#06C755' }}
-                />
-                自分の担当のみ
-              </label>
-            </div>
+            <label className="flex items-center gap-1.5 cursor-pointer text-sm whitespace-nowrap ml-auto">
+              <input
+                type="checkbox"
+                checked={myOnly}
+                onChange={(e) => setMyOnly(e.target.checked)}
+                className="rounded"
+                style={{ accentColor: '#06C755' }}
+              />
+              自分の担当のみ
+            </label>
           )}
-          {/* 営業担当：自分の案件のみ表示中であることを示すバッジ */}
+          {/* 営業担当：バッジ */}
           {isSales && (
-            <div className="search-field" style={{ flexBasis: 'auto', flexShrink: 0 }}>
-              <label>絞り込み</label>
-              <span className="inline-flex items-center gap-1 mt-1 px-2 py-1 bg-green-50 border border-green-200 text-green-700 text-xs rounded-lg font-medium">
-                <span className="material-icons" style={{ fontSize: 13 }}>person</span>
-                自分の担当のみ表示中
-              </span>
-            </div>
+            <span className="inline-flex items-center gap-1 ml-auto px-2 py-1 bg-green-50 border border-green-200 text-green-700 text-xs rounded-lg font-medium whitespace-nowrap">
+              <span className="material-icons" style={{ fontSize: 13 }}>person</span>
+              自分の担当のみ表示中
+            </span>
           )}
         </div>
       </div>
