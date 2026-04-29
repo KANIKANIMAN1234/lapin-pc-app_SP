@@ -177,28 +177,28 @@ export default function FollowupPage() {
         </Link>
       </div>
 
-      {/* ── サマリカード ── */}
-      <div className="grid grid-cols-5 gap-3 mb-4">
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 text-center">
-          <div className="text-2xl font-bold text-gray-800">{projects.length}</div>
-          <div className="text-xs text-gray-500 mt-0.5">追客中合計</div>
+      {/* ── サマリカード（1行6列） ── */}
+      <div className="grid grid-cols-6 gap-2 mb-4">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm py-2.5 px-2 text-center">
+          <div className="text-xl font-bold text-gray-800">{projects.length}</div>
+          <div className="text-[11px] text-gray-500 mt-0.5 whitespace-nowrap">追客中合計</div>
         </div>
         {FOLLOWUP_STATUSES.map((s) => (
-          <div key={s} className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 text-center cursor-pointer hover:shadow-md transition"
+          <div key={s} className="bg-white rounded-xl border border-gray-100 shadow-sm py-2.5 px-2 text-center cursor-pointer hover:shadow-md transition"
             onClick={() => setStatusFilter(statusFilter === s ? 'all' : s)}>
-            <div className="text-2xl font-bold text-gray-800">{statusCount[s] ?? 0}</div>
-            <div className="text-xs text-gray-500 mt-0.5">{STATUS_LABEL[s]}</div>
+            <div className="text-xl font-bold text-gray-800">{statusCount[s] ?? 0}</div>
+            <div className="text-[11px] text-gray-500 mt-0.5 whitespace-nowrap">{STATUS_LABEL[s]}</div>
           </div>
         ))}
-        <div className="bg-red-50 rounded-xl border border-red-100 shadow-sm p-3 text-center cursor-pointer hover:shadow-md transition"
+        <div className="bg-red-50 rounded-xl border border-red-100 shadow-sm py-2.5 px-2 text-center cursor-pointer hover:shadow-md transition"
           onClick={() => setUrgencyFilter(urgencyFilter === 'critical' ? 'all' : 'critical')}>
-          <div className="text-2xl font-bold text-red-600">{criticalCount}</div>
-          <div className="text-xs text-red-500 mt-0.5">要緊急対応</div>
+          <div className="text-xl font-bold text-red-600">{criticalCount}</div>
+          <div className="text-[11px] text-red-500 mt-0.5 whitespace-nowrap">要緊急対応</div>
         </div>
-        <div className="bg-yellow-50 rounded-xl border border-yellow-100 shadow-sm p-3 text-center cursor-pointer hover:shadow-md transition"
+        <div className="bg-yellow-50 rounded-xl border border-yellow-100 shadow-sm py-2.5 px-2 text-center cursor-pointer hover:shadow-md transition"
           onClick={() => setUrgencyFilter(urgencyFilter === 'warning' ? 'all' : 'warning')}>
-          <div className="text-2xl font-bold text-yellow-600">{warningCount}</div>
-          <div className="text-xs text-yellow-600 mt-0.5">要注意</div>
+          <div className="text-xl font-bold text-yellow-600">{warningCount}</div>
+          <div className="text-[11px] text-yellow-600 mt-0.5 whitespace-nowrap">要注意</div>
         </div>
       </div>
 
