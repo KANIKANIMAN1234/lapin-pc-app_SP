@@ -73,6 +73,15 @@ function MapPageInner() {
   const searchParams = useSearchParams();
   const focusProjectId = searchParams.get('focus') ?? '';
 
+  // 出退勤位置ピンパラメータ
+  const pinLatParam  = searchParams.get('pin_lat');
+  const pinLngParam  = searchParams.get('pin_lng');
+  const pinLabelParam = searchParams.get('pin_label') ?? '位置情報';
+  const locationPin: [number, number] | undefined =
+    pinLatParam && pinLngParam
+      ? [Number(pinLatParam), Number(pinLngParam)]
+      : undefined;
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<MapCustomer | null>(null);
 
@@ -144,6 +153,15 @@ function MapPageInner() {
   }, [selectedCustomer?.id]);
 
   const isSales = user?.role === 'sales';
+
+  // 位置ピンが指定されていたら初期表示でその座標に zoom 16 でフォーカス
+  useEffect(() => {
+    if (locationPin) {
+      setFocusCenter(locationPin);
+      setFocusZoom(16);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pinLatParam, pinLngParam]);
 
   // マップ設定の読み込み
   const loadMapSettings = useCallback(() => {
@@ -327,6 +345,8 @@ function MapPageInner() {
             onSelectCustomer={setSelectedCustomer}
             center={focusCenter ?? savedCenter}
             centerZoom={focusZoom}
+            locationPin={locationPin}
+            locationPinLabel={pinLabelParam}
             filterMyOnly={filterMyOnly}
             currentUserId={user?.id ? String(user.id) : undefined}
             focusProjectId={focusProjectId}

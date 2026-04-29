@@ -1,8 +1,24 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+
+/** Google Maps URL `?q=LAT,LNG` から [lat, lng] を抽出 */
+function parseLatLng(url: string): [number, number] | null {
+  const m = url.match(/[?&]q=([-\d.]+),([-\d.]+)/);
+  if (!m) return null;
+  const lat = Number(m[1]), lng = Number(m[2]);
+  return isNaN(lat) || isNaN(lng) ? null : [lat, lng];
+}
+
+/** 位置情報URLを内部マップページへのリンクに変換 */
+function buildMapPageUrl(locUrl: string, label: string): string {
+  const coords = parseLatLng(locUrl);
+  if (!coords) return locUrl; // パース失敗時は元URL
+  return `/map?pin_lat=${coords[0]}&pin_lng=${coords[1]}&pin_label=${encodeURIComponent(label)}`;
+}
 
 const DAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -453,10 +469,8 @@ export default function AttendancePage() {
                   <span className={`text-sm font-medium ${cfg.color}`}>{log.label}</span>
                   {(log.type === 'clock_in' || log.type === 'clock_out') && (
                     locUrl ? (
-                      <a
-                        href={locUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <Link
+                        href={buildMapPageUrl(locUrl, log.type === 'clock_in' ? '出勤位置' : '退勤位置')}
                         title={log.type === 'clock_in' ? '出勤時の位置を地図で確認' : '退勤時の位置を地図で確認'}
                         className={`ml-auto flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg border
                           ${log.type === 'clock_in'
@@ -466,7 +480,7 @@ export default function AttendancePage() {
                       >
                         <span className="material-icons" style={{ fontSize: 13 }}>location_on</span>
                         地図で確認
-                      </a>
+                      </Link>
                     ) : (
                       <span className="ml-auto flex items-center gap-0.5 text-xs text-gray-300" title="位置情報未取得">
                         <span className="material-icons" style={{ fontSize: 13 }}>location_off</span>
@@ -590,16 +604,14 @@ export default function AttendancePage() {
                           <div className="flex items-center justify-center gap-3">
                             {/* 出勤位置 */}
                             {row.clock_in_location ? (
-                              <a
-                                href={row.clock_in_location}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                              <Link
+                                href={buildMapPageUrl(row.clock_in_location, '出勤位置')}
                                 title="出勤時の位置を地図で確認"
                                 className="flex flex-col items-center gap-0.5 text-green-600 hover:text-green-800 transition-colors"
                               >
                                 <span className="material-icons" style={{ fontSize: 18 }}>location_on</span>
                                 <span className="text-[9px] font-bold leading-none">出勤</span>
-                              </a>
+                              </Link>
                             ) : (
                               <div className="flex flex-col items-center gap-0.5 text-gray-300" title="出勤位置未取得">
                                 <span className="material-icons" style={{ fontSize: 18 }}>location_off</span>
@@ -608,16 +620,14 @@ export default function AttendancePage() {
                             )}
                             {/* 退勤位置 */}
                             {row.clock_out_location ? (
-                              <a
-                                href={row.clock_out_location}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                              <Link
+                                href={buildMapPageUrl(row.clock_out_location, '退勤位置')}
                                 title="退勤時の位置を地図で確認"
                                 className="flex flex-col items-center gap-0.5 text-red-500 hover:text-red-700 transition-colors"
                               >
                                 <span className="material-icons" style={{ fontSize: 18 }}>location_on</span>
                                 <span className="text-[9px] font-bold leading-none">退勤</span>
-                              </a>
+                              </Link>
                             ) : (
                               <div className="flex flex-col items-center gap-0.5 text-gray-300" title="退勤位置未取得">
                                 <span className="material-icons" style={{ fontSize: 18 }}>location_off</span>

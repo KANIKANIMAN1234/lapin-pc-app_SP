@@ -108,6 +108,35 @@ function createCustomIcon(status: string, name: string, editMode = false, saving
   });
 }
 
+/** 出退勤位置ピン専用アイコン */
+function createLocationPinIcon(label: string): L.DivIcon {
+  const isClockIn = label.includes('出勤');
+  const color     = isClockIn ? '#16a34a' : '#dc2626';
+  const shadow    = isClockIn ? 'rgba(22,163,74,0.4)' : 'rgba(220,38,38,0.4)';
+  const icon      = isClockIn ? 'login' : 'logout';
+  const html = `
+    <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+      <div style="
+        width:40px;height:40px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+        background:${color};border:3px solid white;
+        box-shadow:0 3px 12px ${shadow};
+        display:flex;align-items:center;justify-content:center;
+      ">
+        <span class="material-icons" style="
+          transform:rotate(45deg);font-size:18px;color:white;
+          font-family:'Material Icons',sans-serif;
+        ">${icon}</span>
+      </div>
+      <div style="
+        background:${color};color:white;font-size:10px;font-weight:700;
+        padding:2px 8px;border-radius:10px;white-space:nowrap;
+        box-shadow:0 2px 6px ${shadow};margin-top:-2px;
+      ">${label}</div>
+    </div>
+  `;
+  return L.divIcon({ className: '', html, iconSize: undefined, iconAnchor: [20, 52] });
+}
+
 function MapCenterUpdater({ center, zoom }: { center: [number, number]; zoom?: number }) {
   const map = useMap();
   useEffect(() => {
@@ -148,6 +177,8 @@ interface MapContentProps {
   editMode?: boolean;
   onPositionSaved?: (name: string) => void;
   onPositionError?: (name: string) => void;
+  locationPin?: [number, number];
+  locationPinLabel?: string;
 }
 
 function MapContent({
@@ -162,6 +193,8 @@ function MapContent({
   onGeocodingProgress,
   editMode = false,
   onPositionSaved,
+  locationPin,
+  locationPinLabel = '位置情報',
   onPositionError,
 }: MapContentProps) {
   const [customers, setCustomers] = useState<MapCustomer[]>([]);
@@ -298,6 +331,20 @@ function MapContent({
         maxZoom={22}
       />
       {center && <MapCenterUpdater center={center} zoom={centerZoom} />}
+      {/* 出退勤位置ピン */}
+      {locationPin && (
+        <Marker
+          position={locationPin}
+          icon={createLocationPinIcon(locationPinLabel)}
+        >
+          <Popup>
+            <div className="text-sm font-bold">{locationPinLabel}</div>
+            <div className="text-xs text-gray-500 mt-1">
+              {locationPin[0].toFixed(6)}, {locationPin[1].toFixed(6)}
+            </div>
+          </Popup>
+        </Marker>
+      )}
       {displayCustomers.map((customer) => (
         <Marker
           key={customer.id}
