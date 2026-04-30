@@ -213,12 +213,14 @@ export default function ProjectDetailPage() {
       const updates = {
         ...editForm,
         work_type: editWorkType,
-        inquiry_date:    editForm.inquiry_date    || null,
-        contract_date:   editForm.contract_date   || null,
-        start_date:      editForm.start_date      || null,
-        completion_date: editForm.completion_date || null,
-        estimated_amount: editForm.estimated_amount !== '' ? Number(editForm.estimated_amount) : undefined,
-        contract_amount:  editForm.contract_amount  !== '' ? Number(editForm.contract_amount)  : undefined,
+        inquiry_date:    String(editForm.inquiry_date    || ''),
+        contract_date:   editForm.contract_date   ? String(editForm.contract_date)   : undefined,
+        start_date:      editForm.start_date      ? String(editForm.start_date)      : undefined,
+        completion_date: editForm.completion_date ? String(editForm.completion_date) : undefined,
+        estimated_amount: Number(editForm.estimated_amount) || 0,
+        contract_amount:  editForm.contract_amount !== '' && editForm.contract_amount != null
+          ? Number(editForm.contract_amount)
+          : undefined,
       };
       await updateProject({ id: projectId, ...updates });
       setEditingBasic(false);
