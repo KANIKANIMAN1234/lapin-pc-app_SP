@@ -79,6 +79,7 @@ export default function ProjectsPage() {
   const [statusList, setStatusList] = useState(DEFAULT_STATUS_LIST);
   const DEFAULT_WORK_TYPE_LIST = ['外壁塗装', '屋根塗装', '防水工事', '内装工事', 'リフォーム', 'その他'];
   const [workTypeList, setWorkTypeList] = useState<string[]>(DEFAULT_WORK_TYPE_LIST);
+  const [userMap, setUserMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const supabase = createClient();
@@ -105,6 +106,19 @@ export default function ProjectsPage() {
             }
           } catch { /* パース失敗時はデフォルト値を維持 */ }
         });
+      });
+
+    // 担当者一覧を取得してIDと名前のマップを作成
+    supabase
+      .from('m_users')
+      .select('id, name')
+      .eq('status', 'active')
+      .then(({ data }) => {
+        if (data) {
+          const map: Record<string, string> = {};
+          data.forEach((u) => { map[u.id] = u.name; });
+          setUserMap(map);
+        }
       });
   }, []);
 
@@ -321,10 +335,10 @@ export default function ProjectsPage() {
                     {/* 管理者のみ担当者名を表示 */}
                     {isAdmin && (
                       <td className="text-sm text-gray-700">
-                        {project.assigned_to_name ? (
+                        {project.assigned_to && userMap[project.assigned_to] ? (
                           <span className="inline-flex items-center gap-1">
                             <span className="material-icons text-gray-400" style={{ fontSize: 14 }}>person</span>
-                            {project.assigned_to_name}
+                            {userMap[project.assigned_to]}
                           </span>
                         ) : (
                           <span className="text-gray-300 text-xs">未設定</span>
