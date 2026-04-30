@@ -209,9 +209,23 @@ export default function ProjectDetailPage() {
   };
 
   const saveEdit = async () => {
-    await updateProject({ id: projectId, ...editForm, work_type: editWorkType });
-    setEditingBasic(false);
-    showToast('基本情報を更新しました');
+    try {
+      const updates = {
+        ...editForm,
+        work_type: editWorkType,
+        inquiry_date:    editForm.inquiry_date    || null,
+        contract_date:   editForm.contract_date   || null,
+        start_date:      editForm.start_date      || null,
+        completion_date: editForm.completion_date || null,
+        estimated_amount: editForm.estimated_amount !== '' ? Number(editForm.estimated_amount) : null,
+        contract_amount:  editForm.contract_amount  !== '' ? Number(editForm.contract_amount)  : null,
+      };
+      await updateProject({ id: projectId, ...updates });
+      setEditingBasic(false);
+      showToast('基本情報を更新しました');
+    } catch (e) {
+      showToast('保存に失敗しました: ' + String(e), 'error');
+    }
   };
 
   // ── 写真アップロード ──
