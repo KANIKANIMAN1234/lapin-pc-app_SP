@@ -146,8 +146,8 @@ export default function ProjectDetailPage() {
       .then(({ data }) => {
         if (data?.value) { try { const p = JSON.parse(data.value); if (Array.isArray(p) && p.length) setAcqRouteOptions(p); } catch {} }
       });
-    supabase.from('m_users').select('id, name').eq('is_active', true)
-      .then(({ data }) => { if (data) setUsers(data); });
+    supabase.from('m_users').select('id, name').eq('status', 'active')
+      .then(({ data, error }) => { if (data) setUsers(data); else console.error('m_users fetch error:', error); });
   }, []);
 
   // 写真
