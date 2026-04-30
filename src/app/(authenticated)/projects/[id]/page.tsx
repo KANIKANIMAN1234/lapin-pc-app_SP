@@ -217,8 +217,8 @@ export default function ProjectDetailPage() {
         contract_date:   editForm.contract_date   || null,
         start_date:      editForm.start_date      || null,
         completion_date: editForm.completion_date || null,
-        estimated_amount: editForm.estimated_amount !== '' ? Number(editForm.estimated_amount) : null,
-        contract_amount:  editForm.contract_amount  !== '' ? Number(editForm.contract_amount)  : null,
+        estimated_amount: editForm.estimated_amount !== '' ? Number(editForm.estimated_amount) : undefined,
+        contract_amount:  editForm.contract_amount  !== '' ? Number(editForm.contract_amount)  : undefined,
       };
       await updateProject({ id: projectId, ...updates });
       setEditingBasic(false);
