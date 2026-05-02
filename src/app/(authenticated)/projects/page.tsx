@@ -54,7 +54,7 @@ export default function ProjectsPage() {
   const [selectedWorkTypes, setSelectedWorkTypes] = useState<string[]>([]);
   // 営業担当は初期状態で自分の案件のみ表示
   const [myOnly, setMyOnly] = useState(isSales);
-  const [sortKey, setSortKey] = useState<'inquiry_date' | 'contract_amount' | 'status'>('inquiry_date');
+  const [sortKey, setSortKey] = useState<'inquiry_date' | 'contract_amount' | 'estimated_amount' | 'status'>('inquiry_date');
   const [sortAsc, setSortAsc] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -154,6 +154,7 @@ export default function ProjectsPage() {
     let cmp = 0;
     if (sortKey === 'inquiry_date') cmp = a.inquiry_date.localeCompare(b.inquiry_date);
     else if (sortKey === 'contract_amount') cmp = (a.contract_amount ?? 0) - (b.contract_amount ?? 0);
+    else if (sortKey === 'estimated_amount') cmp = (a.estimated_amount ?? 0) - (b.estimated_amount ?? 0);
     else if (sortKey === 'status') cmp = statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status);
     return sortAsc ? cmp : -cmp;
   });
@@ -287,8 +288,14 @@ export default function ProjectsPage() {
                     ステータス {sortKey === 'status' ? (sortAsc ? '↑' : '↓') : ''}
                   </th>
                   <th
+                    onClick={() => handleSort('estimated_amount')}
+                    className="cursor-pointer select-none text-right"
+                  >
+                    見積金額 {sortKey === 'estimated_amount' ? (sortAsc ? '↑' : '↓') : ''}
+                  </th>
+                  <th
                     onClick={() => handleSort('contract_amount')}
-                    className="cursor-pointer select-none"
+                    className="cursor-pointer select-none text-right"
                   >
                     契約金額 {sortKey === 'contract_amount' ? (sortAsc ? '↑' : '↓') : ''}
                   </th>
@@ -372,6 +379,9 @@ export default function ProjectsPage() {
                           ))}
                         </select>
                       )}
+                    </td>
+                    <td className="text-right font-medium">
+                      {formatYen(project.estimated_amount)}
                     </td>
                     <td className="text-right font-medium">
                       {formatYen(project.contract_amount)}

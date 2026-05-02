@@ -258,14 +258,12 @@ function MapContent({
 
         if (coords) {
           const [lat, lng] = coords;
-          const saveRes = await fetch('/api/save-geocode', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: p.id, lat, lng }),
-          });
-          if (!saveRes.ok) {
-            const err = await saveRes.json().catch(() => ({}));
-            console.error('[Map] lat/lng save error:', err);
+          const { error: upErr } = await supabase
+            .from('t_projects')
+            .update({ lat, lng })
+            .eq('id', p.id);
+          if (upErr) {
+            console.error('[Map] lat/lng save error:', upErr);
           } else {
             setCustomers((prev) => [...prev, toMapCustomer({ ...p, lat, lng })]);
           }
@@ -288,12 +286,9 @@ function MapContent({
       const { lat, lng } = (e.target as L.Marker).getLatLng();
       setSavingId(customer.id);
       try {
-        const saveRes = await fetch('/api/save-geocode', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: customer.id, lat, lng }),
-        });
-        if (!saveRes.ok) throw new Error('save failed');
+        const sb = createClient();
+        const { error } = await sb.from('t_projects').update({ lat, lng }).eq('id', customer.id);
+        if (error) throw error;
         setCustomers((prev) =>
           prev.map((c) => (c.id === customer.id ? { ...c, lat, lng } : c))
         );

@@ -9,6 +9,24 @@ import type { ProjectStatus } from '@/types';
 
 const DEFAULT_WORK_TYPES = ['外壁塗装', '屋根塗装', '防水工事', '内装工事', 'リフォーム', 'その他'];
 const DEFAULT_ACQUISITION_ROUTES = ['チラシ', '紹介', 'Web', 'LINE', '訪問', 'その他'];
+async function geocodeAddress(fullAddress: string): Promise<[number, number] | null> {
+  const q = fullAddress.trim();
+  if (q.length < 3) return null;
+  try {
+    const resp = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`,
+      { headers: { 'User-Agent': 'LapinReformPC/1.0' } }
+    );
+    const results: { lat?: string; lon?: string }[] = await resp.json();
+    if (Array.isArray(results) && results.length > 0 && results[0].lat && results[0].lon) {
+      return [Number(results[0].lat), Number(results[0].lon)];
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 const DEFAULT_STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
   { value: 'inquiry',        label: '問い合わせ' },
   { value: 'estimate',       label: '見積もり' },
@@ -115,6 +133,9 @@ export default function NewProjectPage() {
       if (custErr) throw custErr;
       if (!cust?.id) throw new Error('顧客マスタの作成に失敗しました');
 
+      const addressQuery = [form.postal_code, form.address].filter(Boolean).join(' ').trim();
+      const coords = await geocodeAddress(addressQuery || form.address);
+
       const data = await createProject({
         customer_id: cust.id as string,
         customer_name: form.customer_name,
@@ -135,6 +156,7 @@ export default function NewProjectPage() {
         thankyou_flag: false,
         followup_flag: false,
         inspection_flag: false,
+        ...(coords ? { lat: coords[0], lng: coords[1] } : {}),
       });
 
       // ── LINE通知（fire-and-forget）──────────────────────────
