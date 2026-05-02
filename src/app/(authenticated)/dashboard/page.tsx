@@ -4,13 +4,14 @@ import { useState, useMemo } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useDashboard } from '@/hooks/useDashboard';
 import NoticesTab from '@/components/notices/NoticesTab';
-import { Bar } from 'react-chartjs-2';
+import { Bar, Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
   BarElement,
   LineElement,
+  LineController,
   PointElement,
   Filler,
   Title,
@@ -18,7 +19,18 @@ import {
   Legend,
 } from 'chart.js';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Filler, Title, Tooltip, Legend);
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  LineController,
+  PointElement,
+  Filler,
+  Title,
+  Tooltip,
+  Legend
+);
 
 const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06C755', '#ec4899'];
 
@@ -180,49 +192,61 @@ function ManagementTab() {
     { title: '粗利率', value: String(kpi.gross_profit_rate), unit: '%' },
   ];
 
-  const performanceBarChartConfig = {
+  const performanceLineChartConfig = {
     labels: performanceBarChart.labels,
     datasets: [
       {
         label: '見積提示金額',
         data: performanceBarChart.estimate_presented,
-        backgroundColor: 'rgba(59, 130, 246, 0.75)',
         borderColor: '#2563eb',
-        borderWidth: 1,
-        borderRadius: 4,
-        maxBarThickness: 18,
+        backgroundColor: 'rgba(59, 130, 246, 0.08)',
+        borderWidth: 2,
+        tension: 0.25,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        pointBackgroundColor: '#2563eb',
+        fill: false,
       },
       {
         label: '契約金額',
         data: performanceBarChart.contract_amount,
-        backgroundColor: 'rgba(6, 199, 85, 0.75)',
         borderColor: '#059669',
-        borderWidth: 1,
-        borderRadius: 4,
-        maxBarThickness: 18,
+        backgroundColor: 'rgba(16, 185, 129, 0.08)',
+        borderWidth: 2,
+        tension: 0.25,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        pointBackgroundColor: '#059669',
+        fill: false,
       },
       {
         label: '完了金額',
         data: performanceBarChart.completed_amount,
-        backgroundColor: 'rgba(245, 158, 11, 0.85)',
         borderColor: '#d97706',
-        borderWidth: 1,
-        borderRadius: 4,
-        maxBarThickness: 18,
+        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+        borderWidth: 2,
+        tension: 0.25,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        pointBackgroundColor: '#d97706',
+        fill: false,
       },
       {
         label: '利益金額',
         data: performanceBarChart.profit_amount,
-        backgroundColor: 'rgba(239, 68, 68, 0.75)',
         borderColor: '#dc2626',
-        borderWidth: 1,
-        borderRadius: 4,
-        maxBarThickness: 18,
+        backgroundColor: 'rgba(239, 68, 68, 0.08)',
+        borderWidth: 2,
+        tension: 0.25,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        pointBackgroundColor: '#dc2626',
+        fill: false,
       },
     ],
   };
 
-  const performanceBarChartOptions = {
+  const performanceLineChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     interaction: { mode: 'index' as const, intersect: false },
@@ -230,7 +254,13 @@ function ManagementTab() {
       legend: {
         display: true,
         position: 'bottom' as const,
-        labels: { boxWidth: 12, padding: 12, font: { size: 10 } },
+        labels: {
+          boxWidth: 12,
+          padding: 12,
+          font: { size: 10 },
+          usePointStyle: true,
+          pointStyle: 'line' as const,
+        },
       },
       tooltip: {
         callbacks: {
@@ -247,6 +277,7 @@ function ManagementTab() {
       x: {
         stacked: false,
         ticks: { maxRotation: 45, minRotation: 0, font: { size: 10 } },
+        grid: { display: true },
       },
       y: {
         beginAtZero: true,
@@ -422,7 +453,7 @@ function ManagementTab() {
             </div>
           </div>
           <div style={{ height: 280 }}>
-            <Bar data={performanceBarChartConfig as never} options={performanceBarChartOptions as never} />
+            <Line data={performanceLineChartConfig as never} options={performanceLineChartOptions as never} />
           </div>
         </div>
 
