@@ -5,7 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { exchangeLineCodeForSupabaseSession, clearLineState } from '@/lib/auth';
 import { createClient } from '@/lib/supabase';
-import type { UserRole } from '@/types';
+import type { RoleLevel } from '@/types';
+import {
+  coerceRoleLevel,
+  parseRoleDefinitions,
+  roleDefinitionForId,
+} from '@/lib/rolesAndNav';
 
 const EDGE_FUNCTION_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
   ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1`
@@ -58,11 +63,27 @@ function CallbackHandler() {
           return;
         }
 
-        // Zustand にUIユーザー情報をセット
+        const { data: row } = await supabase
+          .from('m_users')
+          .select('name, role, role_level')
+          .eq('id', result.user.id)
+          .maybeSingle();
+        const { data: rd } = await supabase
+          .from('m_settings')
+          .select('value')
+          .eq('key', 'role_definitions')
+          .maybeSingle();
+        const defs = parseRoleDefinitions(rd?.value ?? null);
+        const rrole = row?.role ?? result.user.role;
+        const roleLevel = coerceRoleLevel(rrole, (row as { role_level?: string } | null)?.role_level) as RoleLevel;
+        const roleLabel = roleDefinitionForId(defs, rrole)?.label ?? rrole;
+
         setUser({
           id: result.user.id,
-          name: result.user.name,
-          role: result.user.role as UserRole,
+          name: row?.name ?? result.user.name,
+          role: rrole,
+          roleLevel,
+          roleLabel,
           email: result.user.email,
           status: 'active',
         });

@@ -67,8 +67,8 @@ export async function POST(req: NextRequest) {
 
     const admin = createAdmin();
 
-    const { data: me } = await admin.from('m_users').select('role').eq('id', user.id).maybeSingle();
-    const role = (me?.role as string) ?? '';
+    const { data: me } = await admin.from('m_users').select('role_level').eq('id', user.id).maybeSingle();
+    const roleLevel = (me?.role_level as string) ?? '';
 
     const { data: row, error: selErr } = await admin
       .from('t_projects')
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: '案件が見つかりません' }, { status: 404 });
     }
 
-    const can = role === 'admin' || role === 'staff' || row.assigned_to === user.id;
+    const can = roleLevel === 'admin' || roleLevel === 'staff' || row.assigned_to === user.id;
     if (!can) {
       return NextResponse.json({ success: false, error: 'この案件を編集する権限がありません' }, { status: 403 });
     }

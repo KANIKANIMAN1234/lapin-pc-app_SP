@@ -46,9 +46,9 @@ async function getRequestUserId(req: NextRequest): Promise<string | null> {
   return user?.id ?? null;
 }
 
-async function getUserRole(admin: SupabaseClient, userId: string): Promise<string | null> {
-  const { data } = await admin.from('m_users').select('role').eq('id', userId).maybeSingle();
-  return (data?.role as string | undefined) ?? null;
+async function getUserRoleLevel(admin: SupabaseClient, userId: string): Promise<string | null> {
+  const { data } = await admin.from('m_users').select('role_level').eq('id', userId).maybeSingle();
+  return (data?.role_level as string | undefined) ?? null;
 }
 
 function createAdmin(): SupabaseClient {
@@ -131,9 +131,9 @@ export async function POST(req: NextRequest) {
     }
 
     const admin = createAdmin();
-    const role = await getUserRole(admin, userId);
+    const roleLevel = await getUserRoleLevel(admin, userId);
 
-    if (allMissing && role !== 'admin' && role !== 'staff') {
+    if (allMissing && roleLevel !== 'admin' && roleLevel !== 'staff') {
       return NextResponse.json(
         { success: false, error: 'allMissing は admin / staff のみ実行できます' },
         { status: 403 }
@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
       }
 
       const can =
-        role === 'admin' || role === 'staff' || row.created_by === userId;
+        roleLevel === 'admin' || roleLevel === 'staff' || row.created_by === userId;
       if (!can) {
         return NextResponse.json({ success: false, error: 'この顧客に対する操作権限がありません' }, { status: 403 });
       }

@@ -75,9 +75,9 @@ export default function BonusPage() {
       // 全ユーザー（sales）取得
       const { data: users, error: ue } = await supabase
         .from('m_users')
-        .select('id, name, role')
+        .select('id, name, role, role_level')
         .eq('status', 'active')
-        .in('role', ['sales', 'staff', 'admin']);
+        .in('role_level', ['admin', 'staff', 'sales']);
 
       if (ue) throw ue;
 
@@ -92,10 +92,10 @@ export default function BonusPage() {
         perUser[p.assigned_to].gross_profit += Number(p.gross_profit ?? 0);
       }
 
-      const fixedCostPerPerson = period.fixed_cost / Math.max(1, (users ?? []).filter((u) => u.role === 'sales').length);
+      const fixedCostPerPerson = period.fixed_cost / Math.max(1, (users ?? []).filter((u) => (u as { role_level?: string }).role_level === 'sales').length);
 
       const employees: UserSummary[] = (users ?? [])
-        .filter((u) => u.role === 'sales')
+        .filter((u) => (u as { role_level?: string }).role_level === 'sales')
         .map((u) => {
           const agg = perUser[u.id] ?? { contract_count: 0, contract_amount: 0, gross_profit: 0 };
           const surplus = agg.gross_profit - fixedCostPerPerson;
@@ -125,10 +125,10 @@ export default function BonusPage() {
 
       return { period, employees, summary };
     },
-    enabled: user?.role === 'admin',
+    enabled: user?.roleLevel === 'admin',
   });
 
-  if (user?.role !== 'admin') {
+  if (user?.roleLevel !== 'admin') {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
         <span className="material-icons text-6xl text-red-300 mb-4">lock</span>

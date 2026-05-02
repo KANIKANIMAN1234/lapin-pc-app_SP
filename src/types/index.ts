@@ -1,10 +1,18 @@
 // User & Auth
+/** JWT・旧コード互換のゾーン。権限判定は roleLevel を使う */
 export type UserRole = 'admin' | 'staff' | 'sales';
+/** RLS・API の権限グループ（カスタム役職IDでも level で既存ポリシーと整合） */
+export type RoleLevel = 'admin' | 'staff' | 'sales';
 
 export interface User {
   id: string;
   name: string;
-  role: UserRole;
+  /** m_settings role_definitions の id（例: admin, sales, カスタムID） */
+  role: string;
+  /** DB m_users.role_level。画面・アクセス権の基準 */
+  roleLevel: RoleLevel;
+  /** ログイン時に解決した表示名（未設定時は role と同じでも可） */
+  roleLabel?: string;
   email: string;
   phone?: string;
   avatar_url?: string;

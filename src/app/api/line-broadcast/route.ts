@@ -43,7 +43,7 @@ async function collectLineUserIds(
       .from('m_users')
       .select('line_user_id')
       .eq('status', 'active')
-      .in('role', ['admin', 'staff'])
+      .in('role_level', ['admin', 'staff'])
       .not('line_user_id', 'is', null);
     if (error) {
       console.error('[line-broadcast] office fetch error:', error);
@@ -59,7 +59,7 @@ async function collectLineUserIds(
       .from('m_users')
       .select('line_user_id')
       .eq('status', 'active')
-      .eq('role', 'sales')
+      .eq('role_level', 'sales')
       .not('line_user_id', 'is', null);
     if (error) {
       console.error('[line-broadcast] sales fetch error:', error);

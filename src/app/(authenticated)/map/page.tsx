@@ -136,7 +136,7 @@ function MapPageInner() {
     })();
   }, [selectedCustomer?.id]);
 
-  const isSales = user?.role === 'sales';
+  const isSales = user?.roleLevel === 'sales';
 
   // 位置ピンが指定されていたら初期表示でその座標に zoom 16 でフォーカス
   useEffect(() => {

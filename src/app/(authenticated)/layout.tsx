@@ -6,7 +6,12 @@ import { useAuthStore } from '@/stores/authStore';
 import { createClient } from '@/lib/supabase';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
-import type { UserRole } from '@/types';
+import type { RoleLevel, UserRole } from '@/types';
+import {
+  coerceRoleLevel,
+  parseRoleDefinitions,
+  roleDefinitionForId,
+} from '@/lib/rolesAndNav';
 
 export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const { user, setUser } = useAuthStore();
@@ -23,33 +28,48 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
       }
 
       if (!user) {
-        // Supabase Auth のカスタムクレームからロール取得
-        const role = authUser.user_metadata?.role as UserRole | undefined;
-        const name = authUser.user_metadata?.name as string | undefined;
+        const metaRole = authUser.user_metadata?.role as UserRole | undefined;
+        const metaName = authUser.user_metadata?.name as string | undefined;
 
-        // m_users テーブルから詳細を取得
         const { data: userData } = await supabase
           .from('m_users')
-          .select('id, name, role, email, phone, avatar_url, status, line_user_id')
+          .select('id, name, role, role_level, email, phone, avatar_url, status, line_user_id')
           .eq('id', authUser.id)
           .single();
 
+        const { data: rd } = await supabase
+          .from('m_settings')
+          .select('value')
+          .eq('key', 'role_definitions')
+          .maybeSingle();
+        const defs = parseRoleDefinitions(rd?.value ?? null);
+
         if (userData) {
+          const roleLevel = coerceRoleLevel(
+            userData.role,
+            (userData as { role_level?: string | null }).role_level
+          ) as RoleLevel;
+          const roleLabel =
+            roleDefinitionForId(defs, userData.role)?.label ?? userData.role;
           setUser({
             id: userData.id,
             name: userData.name,
-            role: userData.role as UserRole,
+            role: userData.role,
+            roleLevel,
+            roleLabel,
             email: userData.email ?? '',
             phone: userData.phone ?? undefined,
             avatar_url: userData.avatar_url ?? undefined,
             line_user_id: userData.line_user_id ?? undefined,
             status: userData.status as 'active' | 'retired',
           });
-        } else if (role && name) {
+        } else if (metaRole && metaName) {
           setUser({
             id: authUser.id,
-            name,
-            role,
+            name: metaName,
+            role: metaRole,
+            roleLevel: coerceRoleLevel(metaRole) as RoleLevel,
+            roleLabel: roleDefinitionForId(defs, metaRole)?.label ?? metaRole,
             email: authUser.email ?? '',
             status: 'active',
           });

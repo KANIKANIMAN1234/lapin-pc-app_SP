@@ -48,9 +48,9 @@ const STATUS_BG: Record<string, string> = {
 export default function ProjectsPage() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const isAdmin = user?.role === 'admin';
-  const isSales = user?.role === 'sales';
-  const canSoftDelete = user?.role === 'admin' || user?.role === 'staff';
+  const isAdmin = user?.roleLevel === 'admin';
+  const isSales = user?.roleLevel === 'sales';
+  const canSoftDelete = user?.roleLevel === 'admin' || user?.roleLevel === 'staff';
   const updateProject = useUpdateProject();
   const deleteProject = useDeleteProject();
   const [keyword, setKeyword] = useState('');

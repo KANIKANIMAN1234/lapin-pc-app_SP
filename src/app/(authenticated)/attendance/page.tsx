@@ -123,7 +123,7 @@ function fmtMin(min: number | null | undefined): string {
 
 export default function AttendancePage() {
   const { user } = useAuthStore();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.roleLevel === 'admin';
 
   const [now, setNow] = useState(new Date());
   const [loading, setLoading] = useState(true);

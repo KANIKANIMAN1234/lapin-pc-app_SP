@@ -2,31 +2,34 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/authStore';
-
-const NAV_ITEMS = [
-  { href: '/dashboard', icon: 'dashboard', label: 'ダッシュボード' },
-  { href: '/projects', icon: 'folder', label: '案件一覧' },
-  { href: '/attendance', icon: 'schedule', label: '出退勤' },
-  { href: '/expense', icon: 'receipt_long', label: '経費登録' },
-  { href: '/followup', icon: 'follow_the_signs', label: '追客管理' },
-  { href: '/inspection', icon: 'event_note', label: '点検スケジュール' },
-  { href: '/map', icon: 'map', label: '顧客マップ' },
-  { href: '/thankyou', icon: 'mail', label: 'お礼状・DM' },
-  { href: '/bonus', icon: 'payments', label: 'ボーナス計算', adminOnly: true },
-  { href: '/settings', icon: 'person', label: '設定' },
-  { href: '/admin', icon: 'admin_panel_settings', label: '管理', adminOnly: true },
-];
+import { createClient } from '@/lib/supabase';
+import { NAV_ITEM_DEFS, parseNavVisibility, isSidebarItemVisible } from '@/lib/rolesAndNav';
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { user } = useAuthStore();
 
+  const { data: visibilityMap = {} } = useQuery({
+    queryKey: ['nav_visibility'],
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from('m_settings')
+        .select('value')
+        .eq('key', 'nav_visibility_by_role')
+        .maybeSingle();
+      return parseNavVisibility(data?.value ?? null);
+    },
+    staleTime: 60_000,
+  });
+
   return (
     <aside className="sidebar-nav">
       <nav className="sidebar-nav-list">
-        {NAV_ITEMS.map((item) => {
-          if (item.adminOnly && user?.role !== 'admin') return null;
+        {NAV_ITEM_DEFS.map((item) => {
+          if (!isSidebarItemVisible(item, user?.role, user?.roleLevel, visibilityMap)) return null;
           const isActive = pathname.startsWith(item.href);
           return (
             <Link
@@ -42,9 +45,7 @@ export default function Sidebar() {
       </nav>
 
       <div className="px-4 pb-4 mt-auto">
-        <div className="text-[10px] text-gray-300 text-center">
-          Powered by Supabase
-        </div>
+        <div className="text-[10px] text-gray-300 text-center">Powered by Supabase</div>
       </div>
     </aside>
   );

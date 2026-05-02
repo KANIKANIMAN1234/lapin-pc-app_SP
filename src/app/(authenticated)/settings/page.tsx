@@ -115,7 +115,7 @@ export default function SettingsPage() {
   };
 
   const handleSaveSystemSettings = async () => {
-    if (user?.role !== 'admin') return;
+    if (user?.roleLevel !== 'admin') return;
     const supabase = createClient();
     const { error } = await supabase.from('m_settings')
       .upsert({ key: 'gross_profit_alert_threshold', value: bonusAlertRate }, { onConflict: 'key' });
@@ -124,7 +124,7 @@ export default function SettingsPage() {
   };
 
   const handleSaveAttendanceSettings = async () => {
-    if (user?.role !== 'admin') return;
+    if (user?.roleLevel !== 'admin') return;
     const supabase = createClient();
     const rows = [
       { key: 'attendance_standard_daily_hours', value: standardDailyHours },
@@ -137,7 +137,7 @@ export default function SettingsPage() {
   };
 
   const handleSaveLaborLawSettings = async () => {
-    if (user?.role !== 'admin') return;
+    if (user?.roleLevel !== 'admin') return;
     const supabase = createClient();
     const rows = [
       { key: 'labor_law_check_enabled',  value: laborLawEnabled },
@@ -181,7 +181,7 @@ export default function SettingsPage() {
           </div>
           <div>
             <p className="font-medium">{user?.name}</p>
-            <p className="text-sm text-gray-500">{user?.role === 'admin' ? '管理者' : user?.role === 'staff' ? '事務' : '営業'}</p>
+            <p className="text-sm text-gray-500">{user?.roleLabel ?? (user?.roleLevel === 'admin' ? '管理者' : user?.roleLevel === 'staff' ? '事務' : '営業')}</p>
             <p className="text-xs text-gray-400 mt-1">プロフィール画像はLINEアカウントから自動取得されます</p>
           </div>
         </div>
@@ -227,7 +227,7 @@ export default function SettingsPage() {
           {[
             { label: 'ユーザーID', value: user?.id ?? '—' },
             { label: 'メールアドレス', value: user?.email ?? '—' },
-            { label: 'ロール', value: user?.role === 'admin' ? '管理者' : user?.role === 'staff' ? '事務' : '営業' },
+            { label: 'ロール', value: user?.roleLabel ?? (user?.roleLevel === 'admin' ? '管理者' : user?.roleLevel === 'staff' ? '事務' : '営業') },
             { label: 'LINE認証', value: '連携済み ✓' },
           ].map(({ label, value }) => (
             <div key={label} className="flex items-start gap-3">
@@ -239,7 +239,7 @@ export default function SettingsPage() {
       </div>
 
       {/* 勤怠設定（admin のみ） */}
-      {user?.role === 'admin' && (
+      {user?.roleLevel === 'admin' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h3 className="font-bold text-lg mb-5 flex items-center gap-2">
             <span className="material-icons text-green-600">schedule</span>勤怠設定
@@ -309,7 +309,7 @@ export default function SettingsPage() {
       )}
 
       {/* 労基法チェック設定（admin のみ） */}
-      {user?.role === 'admin' && (
+      {user?.roleLevel === 'admin' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           {/* カードヘッダー */}
           <div className="px-6 pt-6 pb-0">
@@ -575,7 +575,7 @@ export default function SettingsPage() {
       )}
 
       {/* システム設定（admin のみ）- 接続情報等 */}
-      {user?.role === 'admin' && (
+      {user?.roleLevel === 'admin' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h3 className="font-bold text-lg mb-5 flex items-center gap-2">
             <span className="material-icons text-green-600">settings</span>その他システム設定

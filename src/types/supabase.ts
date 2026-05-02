@@ -29,7 +29,8 @@ export type Database = {
           line_user_id: string | null;
           email: string | null;
           name: string;
-          role: 'admin' | 'staff' | 'sales';
+          role: string;
+          role_level: 'admin' | 'staff' | 'sales';
           phone: string | null;
           avatar_url: string | null;
           status: 'active' | 'retired';
@@ -42,7 +43,8 @@ export type Database = {
           line_user_id?: string | null;
           email?: string | null;
           name: string;
-          role?: 'admin' | 'staff' | 'sales';
+          role?: string;
+          role_level?: 'admin' | 'staff' | 'sales';
           phone?: string | null;
           avatar_url?: string | null;
           status?: 'active' | 'retired';
@@ -52,7 +54,8 @@ export type Database = {
           line_user_id?: string | null;
           email?: string | null;
           name?: string;
-          role?: 'admin' | 'staff' | 'sales';
+          role?: string;
+          role_level?: 'admin' | 'staff' | 'sales';
           phone?: string | null;
           avatar_url?: string | null;
           status?: 'active' | 'retired';

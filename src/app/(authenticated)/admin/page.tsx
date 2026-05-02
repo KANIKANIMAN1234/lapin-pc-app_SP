@@ -3,26 +3,23 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { createClient } from '@/lib/supabase';
+import { DEFAULT_ROLE_DEFINITIONS, parseRoleDefinitions, type RoleDefinition } from '@/lib/rolesAndNav';
+import { NavVisibilitySettingsTab, RolesSettingsTab } from './role-nav-tabs';
 
-type TabId = 'employees' | 'company' | 'masters';
+type TabId = 'employees' | 'company' | 'masters' | 'roles' | 'nav';
 
 interface EmployeeRow {
   id: string;
   name: string;
   email?: string;
   role: string;
+  role_level?: 'admin' | 'staff' | 'sales';
   phone?: string;
   line_user_id?: string;
   status: 'active' | 'retired';
   can_register_project: boolean;
   created_at: string;
 }
-
-const ROLE_LABELS: Record<string, string> = {
-  admin: '管理者',
-  staff: '事務',
-  sales: '営業',
-};
 
 const MASTER_DEFS = [
   { key: 'work_type_options',       label: '工事種別',     icon: 'construction',  desc: '案件登録で使用する工事の種類' },
@@ -46,6 +43,20 @@ function Toast({ msg, type }: { msg: string; type: 'success' | 'error' }) {
 export default function AdminPage() {
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<TabId>('employees');
+
+  const [roleDefs, setRoleDefs] = useState<RoleDefinition[]>(DEFAULT_ROLE_DEFINITIONS);
+
+  const fetchRoleDefs = useCallback(async () => {
+    const supabase = createClient();
+    const { data } = await supabase.from('m_settings').select('value').eq('key', 'role_definitions').maybeSingle();
+    setRoleDefs(parseRoleDefinitions(data?.value ?? null));
+  }, []);
+
+  useEffect(() => {
+    if (user?.roleLevel === 'admin') fetchRoleDefs();
+  }, [user?.roleLevel, fetchRoleDefs]);
+
+  const roleLabel = (roleId: string) => roleDefs.find((d) => d.id === roleId)?.label ?? roleId;
 
   // Toast
   const [toast, setToast] = useState<{ show: boolean; msg: string; type: 'success' | 'error' }>({ show: false, msg: '', type: 'success' });
@@ -118,7 +129,10 @@ export default function AdminPage() {
     } else {
       showToast(`${regName} さんを登録しました`);
       setShowRegModal(false);
-      setRegName(''); setRegRole('sales'); setRegEmail(''); setRegPhone('');
+      setRegName('');
+      setRegRole(roleDefs.find((d) => d.level === 'sales')?.id ?? 'sales');
+      setRegEmail('');
+      setRegPhone('');
       fetchEmployees();
     }
   };
@@ -144,7 +158,7 @@ export default function AdminPage() {
 
   // SP新規登録権限のインライントグル
   const handleToggleRegisterProject = async (emp: EmployeeRow) => {
-    if (emp.role === 'admin') return;
+    if (emp.role_level === 'admin') return;
     const newVal = !emp.can_register_project;
     const err = await patchUser(emp.id, { can_register_project: newVal });
     if (err) showToast('権限の更新に失敗しました', 'error');
@@ -158,7 +172,8 @@ export default function AdminPage() {
     const err = await patchUser(editTarget.id, {
       name: editName, role: editRole,
       email: editEmail || null, phone: editPhone || null,
-      can_register_project: editRole === 'admin' ? true : editCanRegister,
+      can_register_project:
+        roleDefs.find((d) => d.id === editRole)?.level === 'admin' ? true : editCanRegister,
     });
     setSubmitting(false);
     if (err) {
@@ -276,12 +291,12 @@ export default function AdminPage() {
     }
   };
 
-  if (user?.role !== 'admin') {
+  if (user?.roleLevel !== 'admin') {
     return (
       <div className="flex flex-col items-center justify-center min-h-[40vh] text-center">
         <span className="material-icons text-6xl text-gray-300 mb-4">lock</span>
         <p className="text-xl font-semibold text-gray-600">アクセス権限がありません</p>
-        <p className="text-sm text-gray-400 mt-2">このページは管理者（admin）専用です。</p>
+        <p className="text-sm text-gray-400 mt-2">このページは権限レベル「管理者」のユーザーのみ利用できます。</p>
       </div>
     );
   }
@@ -296,6 +311,8 @@ export default function AdminPage() {
           { id: 'employees', label: '従業員管理', icon: 'badge' },
           { id: 'company',   label: '企業情報',   icon: 'domain' },
           { id: 'masters',   label: 'マスター管理', icon: 'tune' },
+          { id: 'roles',     label: '役割',       icon: 'manage_accounts' },
+          { id: 'nav',       label: '表示ページ',  icon: 'visibility' },
         ] as { id: TabId; label: string; icon: string }[]).map((t) => (
           <button
             key={t.id}
@@ -329,7 +346,16 @@ export default function AdminPage() {
                 ))}
               </div>
             </div>
-            <button className="btn-primary text-sm" onClick={() => { setRegName(''); setRegRole('sales'); setRegEmail(''); setRegPhone(''); setShowRegModal(true); }}>
+            <button
+              className="btn-primary text-sm"
+              onClick={() => {
+                setRegName('');
+                setRegRole(roleDefs.find((d) => d.level === 'sales')?.id ?? 'sales');
+                setRegEmail('');
+                setRegPhone('');
+                setShowRegModal(true);
+              }}
+            >
               <span className="material-icons text-base">person_add</span>新規登録
             </button>
           </div>
@@ -351,8 +377,12 @@ export default function AdminPage() {
                     <tr key={emp.id} className={`border-t border-gray-100 hover:bg-gray-50 ${emp.status === 'retired' ? 'opacity-60' : ''}`}>
                       <td className="px-4 py-3 font-medium">{emp.name}</td>
                       <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${emp.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'}`}>
-                          {ROLE_LABELS[emp.role] ?? emp.role}
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full ${
+                            emp.role_level === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {roleLabel(emp.role)}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-gray-500">{emp.email ?? '—'}</td>
@@ -363,7 +393,7 @@ export default function AdminPage() {
                         }
                       </td>
                       <td className="px-4 py-3">
-                        {emp.role === 'admin' ? (
+                        {emp.role_level === 'admin' ? (
                           <span className="text-blue-600 flex items-center gap-1 text-xs">
                             <span className="material-icons text-base">smartphone</span>常時ON
                           </span>
@@ -395,7 +425,7 @@ export default function AdminPage() {
                               <button onClick={() => openEdit(emp)} className="text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-50">
                                 <span className="material-icons text-sm">edit</span>
                               </button>
-                              {emp.role !== 'admin' && (
+                              {emp.role_level !== 'admin' && (
                                 <button onClick={() => { setRetireTarget(emp); setShowRetireModal(true); }} className="text-xs px-2 py-1 border border-red-200 text-red-500 rounded hover:bg-red-50">
                                   <span className="material-icons text-sm">person_off</span>
                                 </button>
@@ -545,6 +575,19 @@ export default function AdminPage() {
         </div>
       )}
 
+      {activeTab === 'roles' && (
+        <RolesSettingsTab
+          showToast={showToast}
+          employees={employees}
+          onSaved={(defs) => {
+            setRoleDefs(defs);
+            fetchEmployees();
+          }}
+        />
+      )}
+
+      {activeTab === 'nav' && <NavVisibilitySettingsTab showToast={showToast} roleDefinitions={roleDefs} />}
+
       {/* 登録モーダル */}
       {showRegModal && (
         <div className="modal-overlay" onClick={() => setShowRegModal(false)}>
@@ -562,9 +605,11 @@ export default function AdminPage() {
                 <div className="form-group">
                   <label>役職 <span className="required">*</span></label>
                   <select className="form-input" value={regRole} onChange={(e) => setRegRole(e.target.value)}>
-                    <option value="admin">管理者</option>
-                    <option value="staff">事務</option>
-                    <option value="sales">営業</option>
+                    {roleDefs.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.label}（{d.id}）
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="form-group">
@@ -608,9 +653,11 @@ export default function AdminPage() {
                 <div className="form-group">
                   <label>役職</label>
                   <select className="form-input" value={editRole} onChange={(e) => setEditRole(e.target.value)}>
-                    <option value="admin">管理者</option>
-                    <option value="staff">事務</option>
-                    <option value="sales">営業</option>
+                    {roleDefs.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.label}（{d.id}）
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="form-group">
@@ -627,7 +674,7 @@ export default function AdminPage() {
                       <span className="material-icons text-base text-gray-400">smartphone</span>
                       SP新規登録権限
                     </span>
-                    {editRole === 'admin' ? (
+                    {roleDefs.find((d) => d.id === editRole)?.level === 'admin' ? (
                       <span className="text-xs text-blue-600 font-medium">管理者は常時ON</span>
                     ) : (
                       <button

@@ -22,17 +22,17 @@ export async function POST(req: NextRequest) {
 
   const { data: profile, error: profileErr } = await admin
     .from('m_users')
-    .select('role')
+    .select('role_level')
     .eq('id', userId)
     .is('deleted_at', null)
     .maybeSingle();
 
-  if (profileErr || !profile?.role) {
+  if (profileErr || !profile?.role_level) {
     return NextResponse.json({ success: false, error: 'ユーザー情報を確認できません' }, { status: 403 });
   }
 
-  const role = profile.role as string;
-  if (!['admin', 'staff'].includes(role)) {
+  const roleLevel = profile.role_level as string;
+  if (!['admin', 'staff'].includes(roleLevel)) {
     return NextResponse.json({ success: false, error: '論理削除の権限がありません' }, { status: 403 });
   }
 

@@ -44,12 +44,12 @@ async function assertCanAccessProject(
 ): Promise<boolean> {
   const { data: profile } = await admin
     .from('m_users')
-    .select('role')
+    .select('role_level')
     .eq('id', userId)
     .maybeSingle();
-  const role = profile?.role as string | undefined;
-  if (role === 'admin' || role === 'staff') return true;
-  if (role === 'sales') {
+  const level = profile?.role_level as string | undefined;
+  if (level === 'admin' || level === 'staff') return true;
+  if (level === 'sales') {
     return project.created_by === userId || project.assigned_to === userId;
   }
   return false;

@@ -41,14 +41,14 @@ export async function GET(req: NextRequest) {
 
     const { data: profile, error: pErr } = await admin
       .from('m_users')
-      .select('role')
+      .select('role_level')
       .eq('id', userId)
       .maybeSingle();
-    if (pErr || !profile?.role) {
+    if (pErr || !profile?.role_level) {
       return NextResponse.json({ error: 'ユーザー情報が取得できません' }, { status: 403 });
     }
-    const role = profile.role as string;
-    if (!['admin', 'staff', 'sales'].includes(role)) {
+    const roleLevel = profile.role_level as string;
+    if (!['admin', 'staff', 'sales'].includes(roleLevel)) {
       return NextResponse.json({ error: '権限がありません' }, { status: 403 });
     }
 

@@ -218,7 +218,7 @@ export default function Header() {
         <div className="header-user-menu">
           <span className="header-user-name">{user?.name}</span>
           <span className="header-user-role">
-            {user?.role ? ROLE_LABELS[user.role] || user.role : ''}
+            {user?.role ? user.roleLabel || ROLE_LABELS[user.role] || user.role : ''}
           </span>
           <button onClick={handleLogout} className="header-icon-btn" title="ログアウト">
             <span className="material-icons">logout</span>

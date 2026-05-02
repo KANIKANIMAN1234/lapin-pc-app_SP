@@ -48,7 +48,7 @@ function formatDate(iso: string): string {
 // ── メインコンポーネント ──────────────────────────────────────
 export default function NoticesTab() {
   const { user } = useAuthStore();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.roleLevel === 'admin';
 
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);

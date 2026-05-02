@@ -57,19 +57,20 @@ async function assertCanRegisterProject(
 ): Promise<{ ok: false; message: string } | { ok: true; role: string }> {
   const { data: profile, error } = await admin
     .from('m_users')
-    .select('role')
+    .select('role, role_level')
     .eq('id', userId)
     .maybeSingle();
   if (error || !profile) {
     return { ok: false, message: 'ユーザー情報が取得できません' };
   }
-  const role = profile.role as string;
-  if (role === 'admin' || role === 'staff') return { ok: true, role };
-  if (role === 'sales') {
-    if (assignedTo === userId) return { ok: true, role };
+  const roleId = profile.role as string;
+  const level = profile.role_level as string;
+  if (level === 'admin' || level === 'staff') return { ok: true, role: roleId };
+  if (level === 'sales') {
+    if (assignedTo === userId) return { ok: true, role: roleId };
     if (opts?.registrationKind === 'existing') {
       const last = await getLatestAssignedForCustomer(admin, opts.customerId);
-      if (last && last === assignedTo) return { ok: true, role };
+      if (last && last === assignedTo) return { ok: true, role: roleId };
     }
     return {
       ok: false,
