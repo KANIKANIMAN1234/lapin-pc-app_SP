@@ -349,15 +349,21 @@ export default function ProjectDetailPage() {
         .is('deleted_at', null)
         .order('expense_date', { ascending: false });
       if (error) throw error;
-      return (data ?? []) as {
-        id: string;
-        expense_date: string;
-        category: string;
-        amount: number;
-        memo: string | null;
-        status: string;
-        m_users: { name: string } | null;
-      }[];
+      type JoinUser = { name: string } | { name: string }[] | null | undefined;
+      return (data ?? []).map((row) => {
+        const r = row as {
+          id: string;
+          expense_date: string;
+          category: string;
+          amount: number;
+          memo: string | null;
+          status: string;
+          m_users: JoinUser;
+        };
+        const u = r.m_users;
+        const m_users: { name: string } | null = Array.isArray(u) ? u[0] ?? null : u ?? null;
+        return { ...r, m_users };
+      });
     },
     enabled: !!projectId,
   });
