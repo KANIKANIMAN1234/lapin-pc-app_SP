@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-async function sendLinePush(lineUserId: string, text: string): Promise<boolean> {
+async function sendLinePushMessages(lineUserId: string, messages: object[]): Promise<boolean> {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   if (!token) {
     console.error('[followup/notify-assignee] LINE_CHANNEL_ACCESS_TOKEN 未設定');
@@ -13,10 +13,7 @@ async function sendLinePush(lineUserId: string, text: string): Promise<boolean> 
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({
-      to: lineUserId,
-      messages: [{ type: 'text', text }],
-    }),
+    body: JSON.stringify({ to: lineUserId, messages }),
   });
   if (!res.ok) {
     const err = await res.text();
@@ -25,21 +22,20 @@ async function sendLinePush(lineUserId: string, text: string): Promise<boolean> 
   return res.ok;
 }
 
-function resolveAppBaseUrl(): string | null {
-  const tryOrigin = (raw: string): string | null => {
-    const s = raw.trim();
-    if (!s) return null;
-    try {
-      const href = /^https?:\/\//i.test(s) ? s : `https://${s}`;
-      return new URL(href).origin;
-    } catch {
-      return null;
-    }
-  };
+function tryOrigin(raw: string | undefined): string | null {
+  const s = raw?.trim() ?? '';
+  if (!s) return null;
+  try {
+    const href = /^https?:\/\//i.test(s) ? s : `https://${s}`;
+    return new URL(href).origin;
+  } catch {
+    return null;
+  }
+}
 
+function resolveAppBaseUrl(): string | null {
   const fromExplicit =
-    tryOrigin(process.env.NEXT_PUBLIC_APP_URL ?? '') ??
-    tryOrigin(process.env.NEXT_PUBLIC_SITE_URL ?? '');
+    tryOrigin(process.env.NEXT_PUBLIC_APP_URL) ?? tryOrigin(process.env.NEXT_PUBLIC_SITE_URL);
   if (fromExplicit) return fromExplicit;
 
   const vercel = process.env.VERCEL_URL?.trim();
@@ -60,8 +56,133 @@ function resolveAppBaseUrl(): string | null {
   return null;
 }
 
+/** 通知内の「案件詳細」リンク: モバイル用 URL を優先（未設定時は PC と同じオリジン） */
+function resolveDetailBaseUrl(): string | null {
+  return (
+    tryOrigin(process.env.NEXT_PUBLIC_MOBILE_APP_URL) ??
+    tryOrigin(process.env.MOBILE_APP_PUBLIC_URL) ??
+    resolveAppBaseUrl()
+  );
+}
+
+function projectDetailUrl(base: string, projectId: string): string {
+  const root = base.replace(/\/$/, '');
+  return `${root}/projects/${projectId}`;
+}
+
+/** スマホのトーク画面向け Flex（タップで開くボタン付き） */
+function buildFollowupFlex(options: {
+  assigneeName: string;
+  customerName: string;
+  projectNumber: string;
+  daysPhrase: string;
+  detailUrl: string | null;
+}): Record<string, unknown> {
+  const inner: object[] = [
+    {
+      type: 'text',
+      text: `${options.assigneeName} 様`,
+      weight: 'bold',
+      size: 'md',
+      wrap: true,
+      color: '#333333',
+    },
+    { type: 'separator', margin: 'md' },
+    {
+      type: 'text',
+      text: `顧客: ${options.customerName}`,
+      size: 'sm',
+      wrap: true,
+      color: '#333333',
+    },
+    {
+      type: 'text',
+      text: `案件番号: ${options.projectNumber}`,
+      size: 'xs',
+      color: '#888888',
+      wrap: true,
+    },
+    {
+      type: 'text',
+      text: options.daysPhrase,
+      size: 'sm',
+      wrap: true,
+      margin: 'md',
+      color: '#1a1a1a',
+    },
+    {
+      type: 'text',
+      text: '追客のフォローをお願いします。',
+      size: 'xs',
+      color: '#666666',
+      wrap: true,
+    },
+  ];
+
+  if (!options.detailUrl) {
+    inner.push({
+      type: 'text',
+      text: '※詳細を開くボタンは、NEXT_PUBLIC_APP_URL または NEXT_PUBLIC_MOBILE_APP_URL 設定後に表示されます。',
+      size: 'xs',
+      color: '#b45309',
+      wrap: true,
+      margin: 'md',
+    });
+  }
+
+  const bubble: Record<string, unknown> = {
+    type: 'bubble',
+    size: 'kilo',
+    header: {
+      type: 'box',
+      layout: 'vertical',
+      paddingAll: '12px',
+      backgroundColor: '#06C755',
+      contents: [
+        {
+          type: 'text',
+          text: '📋 追客リマインド',
+          color: '#ffffff',
+          weight: 'bold',
+          size: 'sm',
+        },
+      ],
+    },
+    body: {
+      type: 'box',
+      layout: 'vertical',
+      spacing: 'sm',
+      paddingAll: '14px',
+      contents: inner,
+    },
+  };
+
+  if (options.detailUrl) {
+    bubble.footer = {
+      type: 'box',
+      layout: 'vertical',
+      paddingAll: '10px',
+      contents: [
+        {
+          type: 'button',
+          style: 'primary',
+          color: '#06C755',
+          height: 'sm',
+          action: {
+            type: 'uri',
+            label: '案件詳細を開く',
+            uri: options.detailUrl,
+          },
+        },
+      ],
+    };
+  }
+
+  return bubble;
+}
+
 /**
- * 追客一覧から担当者へ「問い合わせから〇日経過」の LINE 通知
+ * 追客一覧から担当者へ「問い合わせから〇日経過」の LINE 通知（モバイル向け Flex）
  */
 export async function POST(req: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -130,20 +251,27 @@ export async function POST(req: Request) {
     }
   }
 
-  const base = resolveAppBaseUrl();
-  const detailLine = base
-    ? `\n\n案件詳細: ${base}/projects/${project.id}`
-    : '\n\n※案件詳細のリンクを付けるには、Vercel に NEXT_PUBLIC_APP_URL（例: https://xxx.vercel.app）を設定してください。';
+  const detailBase = resolveDetailBaseUrl();
+  const detailUrl = detailBase ? projectDetailUrl(detailBase, project.id) : null;
 
-  const text =
-    `【追客リマインド】\n` +
-    `${assignee.name} 様\n\n` +
-    `「${project.customer_name}」（${project.project_number}）は、` +
-    `${daysPhrase}。\n` +
-    `追客管理のフォローをお願いします。` +
-    detailLine;
+  const flexContents = buildFollowupFlex({
+    assigneeName: assignee.name,
+    customerName: project.customer_name,
+    projectNumber: project.project_number,
+    daysPhrase,
+    detailUrl,
+  });
 
-  const ok = await sendLinePush(lineUid, text);
+  const altText = `【追客リマインド】${project.customer_name}（${project.project_number}）${daysPhrase}`;
+
+  const ok = await sendLinePushMessages(lineUid, [
+    {
+      type: 'flex',
+      altText,
+      contents: flexContents,
+    },
+  ]);
+
   if (!ok) {
     return NextResponse.json(
       { success: false, error: 'LINE送信に失敗しました（トークン・友だち追加を確認してください）' },

@@ -31,6 +31,7 @@ const MASTER_DEFS = [
   { key: 'expense_category_options', label: '経費カテゴリ', icon: 'receipt_long', desc: '経費登録で使用するカテゴリ' },
   { key: 'meeting_type_options',    label: '商談種別',     icon: 'handshake',     desc: '商談記録で使用する種別' },
   { key: 'photo_phase_options',     label: '写真撮影フェーズ', icon: 'photo_camera', desc: '案件詳細の写真タブ・スマホ現場写真で選択するフェーズ' },
+  { key: 'inspection_eligible_work_types', label: '1年・3年点検の対象工事', icon: 'event_note', desc: '完工案件のうち、案件の工事種別に少なくとも1つが一致するものだけ点検スケジュールに表示（工事種別マスタの表記と揃える）' },
   { key: 'drive_folder_template',   label: 'Drive 新規フォルダ構成', icon: 'folder', desc: '新規案件作成時に作るサブフォルダ。階層は / で区切る（例: 03_施工写真/着工前）。連携実装が参照します。' },
 ];
 

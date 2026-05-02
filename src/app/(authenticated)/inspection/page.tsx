@@ -3,6 +3,10 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase';
+import {
+  parseInspectionEligibleWorkTypes,
+  projectHasInspectionEligibleWorkType,
+} from '@/lib/inspectionEligibleWorkTypes';
 
 type InspectionType = '1year' | '3year';
 type InspectionStatus = 'scheduled' | 'completed' | 'overdue';
@@ -50,10 +54,18 @@ export default function InspectionPage() {
     queryKey: ['inspections'],
     queryFn: async () => {
       const supabase = createClient();
+
+      const { data: settingRow } = await supabase
+        .from('m_settings')
+        .select('value')
+        .eq('key', 'inspection_eligible_work_types')
+        .maybeSingle();
+      const eligible = parseInspectionEligibleWorkTypes(settingRow?.value ?? null);
+
       const { data, error } = await supabase
         .from('t_projects')
         .select(`
-          id, project_number, customer_name, address,
+          id, project_number, customer_name, address, work_type,
           completion_date, inspection_flag,
           m_users!assigned_to(name)
         `)
@@ -67,6 +79,9 @@ export default function InspectionPage() {
       const items: InspectionItem[] = [];
       for (const p of data ?? []) {
         if (!p.completion_date) continue;
+        if (!projectHasInspectionEligibleWorkType(p.work_type as string[] | null, eligible)) {
+          continue;
+        }
         const assignedName = (p.m_users as unknown as { name: string } | null)?.name;
 
         for (const years of [1, 3] as const) {
@@ -121,6 +136,11 @@ export default function InspectionPage() {
           <span className="text-blue-600 font-medium">90日以内: {upcomingCount}件</span>
         </div>
       </div>
+
+      <p className="text-sm text-gray-500 mb-4">
+        表示対象は<strong className="text-gray-700">管理 › マスター管理「1年・3年点検の対象工事」</strong>
+        に含まれる工事種別が1つ以上ある完工案件のみです。
+      </p>
 
       <div className="flex items-center gap-4 mb-4 flex-wrap">
         <div className="flex items-center gap-4 text-sm text-gray-600">
