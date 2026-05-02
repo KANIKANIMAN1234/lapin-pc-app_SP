@@ -163,7 +163,7 @@ export default function NewProjectPage() {
                 value={form.customer_name}
                 onChange={(e) => setForm((f) => ({ ...f, customer_name: e.target.value }))}
                 className="form-input"
-                placeholder="例: 田中太郎"
+                placeholder="氏名または会社名"
                 required
               />
             </div>

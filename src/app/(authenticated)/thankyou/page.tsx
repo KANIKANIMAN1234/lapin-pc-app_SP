@@ -7,8 +7,6 @@ import type { Project } from '@/types';
 
 type TemplateType = 'thankyou' | 'seasonal' | 'campaign';
 
-const DEFAULT_COMPANY = 'ラパンリフォーム';
-
 const BODY_TEMPLATES: Record<TemplateType, { label: string; icon: string; iconColor: string; body: string }> = {
   thankyou: {
     label: 'お礼状',
@@ -35,7 +33,7 @@ export default function ThankYouPage() {
   const [activeTemplate, setActiveTemplate] = useState<TemplateType>('thankyou');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [keyword, setKeyword] = useState('');
-  const [companyName, setCompanyName] = useState(DEFAULT_COMPANY);
+  const [companyName, setCompanyName] = useState('');
 
   useEffect(() => {
     const supabase = createClient();
@@ -84,7 +82,7 @@ export default function ThankYouPage() {
   });
 
   const template = BODY_TEMPLATES[activeTemplate];
-  const displayTitle = companyName;
+  const displayTitle = companyName.trim() || '（管理画面の企業情報で会社名を登録してください）';
 
   const filtered = projects.filter((p) => {
     if (!keyword) return true;

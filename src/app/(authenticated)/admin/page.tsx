@@ -425,7 +425,7 @@ export default function AdminPage() {
           ) : (
             <div className="space-y-5">
               {[
-                { key: 'company_name',  label: '会社名・屋号',    placeholder: '例: ラパンリフォーム', icon: 'business' },
+                { key: 'company_name',  label: '会社名・屋号',    placeholder: '例: ○○リフォーム株式会社', icon: 'business' },
                 { key: 'representative', label: '代表者',          placeholder: '例: 中山隆志',         icon: 'person' },
                 { key: 'address',       label: '住所',            placeholder: '例: 埼玉県狭山市...',   icon: 'location_on' },
                 { key: 'phone',         label: '電話番号',         placeholder: '例: 04-2907-5022',     icon: 'phone' },
