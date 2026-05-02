@@ -1,11 +1,40 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCreateProject } from '@/hooks/useProjects';
 import { useAuthStore } from '@/stores/authStore';
 import { createClient } from '@/lib/supabase';
 import type { ProjectStatus } from '@/types';
+
+type CustomerPickRow = {
+  id: string;
+  customer_number: string | null;
+  customer_name: string;
+  customer_name_kana: string | null;
+  postal_code: string | null;
+  address: string;
+  phone: string;
+  email: string | null;
+};
+
+type ProjectHistoryRow = {
+  id: string;
+  project_number: string | null;
+  status: string;
+  inquiry_date: string;
+  work_description: string;
+};
+
+const PROJECT_STATUS_LABEL: Record<string, string> = {
+  inquiry: '問い合わせ',
+  estimate: '見積',
+  followup_status: 'フォロー中',
+  contract: '契約',
+  in_progress: '施工中',
+  completed: '完工',
+  lost: '失注',
+};
 
 const DEFAULT_WORK_TYPES = ['外壁塗装', '屋根塗装', '防水工事', '内装工事', 'リフォーム', 'その他'];
 const DEFAULT_ACQUISITION_ROUTES = ['チラシ', '紹介', 'Web', 'LINE', '訪問', 'その他'];
@@ -73,7 +102,82 @@ export default function NewProjectPage() {
     status: 'inquiry' as ProjectStatus,
   });
 
+  const [customerMode, setCustomerMode] = useState<'new' | 'existing'>('new');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [selectedCustomerNumber, setSelectedCustomerNumber] = useState<string | null>(null);
+  const [customerSuggestions, setCustomerSuggestions] = useState<CustomerPickRow[]>([]);
+  const [projectHistory, setProjectHistory] = useState<ProjectHistoryRow[]>([]);
+
   const [error, setError] = useState('');
+
+  const fetchProjectHistory = useCallback(async (customerId: string) => {
+    const supabase = createClient();
+    const { data, error: qErr } = await supabase
+      .from('t_projects')
+      .select('id, project_number, status, inquiry_date, work_description')
+      .eq('customer_id', customerId)
+      .is('deleted_at', null)
+      .order('inquiry_date', { ascending: false })
+      .limit(30);
+    if (qErr) {
+      console.error('[PC new-project] history', qErr);
+      setProjectHistory([]);
+      return;
+    }
+    setProjectHistory((data ?? []) as ProjectHistoryRow[]);
+  }, []);
+
+  useEffect(() => {
+    if (customerMode !== 'existing') {
+      setCustomerSuggestions([]);
+      return;
+    }
+    const q = form.customer_name.trim();
+    if (q.length < 1) {
+      setCustomerSuggestions([]);
+      return;
+    }
+    const timer = window.setTimeout(async () => {
+      const supabase = createClient();
+      const { data, error: sErr } = await supabase
+        .from('m_customers')
+        .select(
+          'id, customer_number, customer_name, customer_name_kana, postal_code, address, phone, email',
+        )
+        .is('deleted_at', null)
+        .or(`customer_name.ilike.%${q}%,customer_name_kana.ilike.%${q}%,customer_number.ilike.%${q}%`)
+        .order('customer_name')
+        .limit(20);
+      if (sErr) {
+        console.error('[PC new-project] customer search', sErr);
+        setCustomerSuggestions([]);
+        return;
+      }
+      setCustomerSuggestions((data ?? []) as CustomerPickRow[]);
+    }, 320);
+    return () => window.clearTimeout(timer);
+  }, [form.customer_name, customerMode]);
+
+  const clearCustomerLink = () => {
+    setSelectedCustomerId(null);
+    setSelectedCustomerNumber(null);
+    setProjectHistory([]);
+  };
+
+  const applyCustomerRow = (row: CustomerPickRow) => {
+    setSelectedCustomerId(row.id);
+    setSelectedCustomerNumber(row.customer_number);
+    setForm((f) => ({
+      ...f,
+      customer_name: row.customer_name,
+      customer_name_kana: row.customer_name_kana ?? '',
+      postal_code: row.postal_code ?? '',
+      address: row.address,
+      phone: row.phone,
+      email: row.email ?? '',
+    }));
+    void fetchProjectHistory(row.id);
+  };
 
   const toggleWorkType = (wt: string) => {
     setForm((f) => ({
@@ -90,9 +194,49 @@ export default function NewProjectPage() {
       setError('必須項目（顧客名・住所・電話番号・工事種別）を入力してください');
       return;
     }
+    if (customerMode === 'existing' && !selectedCustomerId) {
+      setError('既存顧客の場合は、名前を入力して候補から顧客を選択してください');
+      return;
+    }
 
     try {
+      const supabase = createClient();
+      let customerIdToUse: string;
+
+      if (customerMode === 'new') {
+        const { data: newCust, error: cErr } = await supabase
+          .from('m_customers')
+          .insert({
+            customer_name: form.customer_name,
+            customer_name_kana: form.customer_name_kana || null,
+            postal_code: form.postal_code || null,
+            address: form.address,
+            phone: form.phone,
+            email: form.email || null,
+            created_by: user?.id ?? null,
+          })
+          .select('id')
+          .single();
+        if (cErr) throw cErr;
+        customerIdToUse = (newCust as { id: string }).id;
+      } else {
+        customerIdToUse = selectedCustomerId as string;
+        const { error: uErr } = await supabase
+          .from('m_customers')
+          .update({
+            customer_name: form.customer_name,
+            customer_name_kana: form.customer_name_kana || null,
+            postal_code: form.postal_code || null,
+            address: form.address,
+            phone: form.phone,
+            email: form.email || null,
+          })
+          .eq('id', customerIdToUse);
+        if (uErr) throw uErr;
+      }
+
       const data = await createProject({
+        customer_id: customerIdToUse,
         customer_name: form.customer_name,
         customer_name_kana: form.customer_name_kana || undefined,
         postal_code: form.postal_code || undefined,
@@ -110,6 +254,7 @@ export default function NewProjectPage() {
         thankyou_flag: false,
         followup_flag: false,
         inspection_flag: false,
+        created_by: user?.id ?? null,
       });
 
       // ── LINE通知（fire-and-forget）──────────────────────────
@@ -155,17 +300,99 @@ export default function NewProjectPage() {
         {/* 顧客情報 */}
         <div className="detail-section">
           <h3><span className="material-icons text-green-600" style={{ fontSize: 18 }}>person</span> 顧客情報</h3>
+
+          <div className="form-group mb-4">
+            <label>登録区分</label>
+            <div className="flex flex-wrap gap-4 mt-2 text-sm">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="pcCustMode"
+                  checked={customerMode === 'new'}
+                  onChange={() => {
+                    setCustomerMode('new');
+                    clearCustomerLink();
+                  }}
+                />
+                新規顧客（初回のご依頼）
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="pcCustMode"
+                  checked={customerMode === 'existing'}
+                  onChange={() => {
+                    setCustomerMode('existing');
+                    clearCustomerLink();
+                  }}
+                />
+                既存顧客（リピート・追加工事）…名前を入力し候補から選択
+              </label>
+            </div>
+          </div>
+
+          {customerMode === 'existing' && selectedCustomerNumber && (
+            <p className="text-sm text-blue-700 font-medium mb-3">
+              選択中の顧客管理番号: <span className="font-mono">{selectedCustomerNumber}</span>
+              <button type="button" className="ml-3 text-xs text-gray-500 underline" onClick={clearCustomerLink}>
+                選択を解除
+              </button>
+            </p>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
-            <div className="form-group">
+            <div className="form-group col-span-2">
               <label>顧客名 <span className="required">*</span></label>
               <input
                 type="text"
                 value={form.customer_name}
-                onChange={(e) => setForm((f) => ({ ...f, customer_name: e.target.value }))}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setForm((f) => ({ ...f, customer_name: v }));
+                  if (customerMode === 'existing' && selectedCustomerId) clearCustomerLink();
+                }}
                 className="form-input"
                 placeholder="氏名または会社名"
                 required
               />
+              {customerMode === 'existing' && customerSuggestions.length > 0 && (
+                <div className="mt-2 border border-gray-200 rounded-lg bg-gray-50 max-h-48 overflow-y-auto">
+                  <p className="text-xs text-gray-500 px-3 py-2 border-b border-gray-100">候補（クリックで選択）</p>
+                  <ul className="divide-y divide-gray-100">
+                    {customerSuggestions.map((row) => (
+                      <li key={row.id}>
+                        <button
+                          type="button"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-green-50"
+                          onClick={() => applyCustomerRow(row)}
+                        >
+                          <span className="font-medium">{row.customer_name}</span>
+                          {row.customer_number && (
+                            <span className="ml-2 text-xs font-mono text-blue-600">{row.customer_number}</span>
+                          )}
+                          <span className="block text-xs text-gray-500 truncate">{row.address}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {customerMode === 'existing' && selectedCustomerId && projectHistory.length > 0 && (
+                <div className="mt-3 border border-amber-100 rounded-lg bg-amber-50/50 p-3">
+                  <p className="text-xs font-bold text-amber-900 mb-2">同一顧客の工事履歴</p>
+                  <ul className="space-y-1.5 text-xs max-h-40 overflow-y-auto">
+                    {projectHistory.map((h) => (
+                      <li key={h.id} className="text-gray-700 border-b border-amber-100/80 pb-1.5 last:border-0">
+                        <span className="font-mono font-semibold">{h.project_number ?? '—'}</span>
+                        <span className="mx-1">·</span>
+                        {PROJECT_STATUS_LABEL[h.status] ?? h.status}
+                        <span className="mx-1">·</span>
+                        {h.inquiry_date}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
             <div className="form-group">
               <label>顧客名（ふりがな）</label>

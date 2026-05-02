@@ -60,6 +60,7 @@ export interface Project {
   drive_folder_id?: string;
   drive_folder_url?: string;
   notes?: string;
+  created_by?: string | null;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;

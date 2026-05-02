@@ -41,6 +41,16 @@ const MEETING_TYPES = ['初回商談', '現地調査', '見積提出', '契約',
 
 const BUDGET_CATEGORIES = ['材料費', '労務費', '外注費', '経費', 'その他'] as const;
 
+const CUSTOMER_HISTORY_STATUS_LABEL: Record<string, string> = {
+  inquiry: '問い合わせ',
+  estimate: '見積',
+  followup_status: 'フォロー中',
+  contract: '契約',
+  in_progress: '施工中',
+  completed: '完工',
+  lost: '失注',
+};
+
 // ─── ヘルパー ────────────────────────────────────────────────────
 function fmt(v: number | null | undefined) {
   if (v == null) return '-';
@@ -91,6 +101,48 @@ export default function ProjectDetailPage() {
   const projectId = params.id as string;
 
   const { data: project, isLoading } = useProject(projectId);
+  const customerId =
+    project && typeof project === 'object' && 'customer_id' in project
+      ? (project as { customer_id?: string | null }).customer_id
+      : null;
+
+  const { data: customerMaster } = useQuery({
+    queryKey: ['m_customer', customerId],
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('m_customers')
+        .select('customer_number, customer_name')
+        .eq('id', customerId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { customer_number: string | null; customer_name: string } | null;
+    },
+    enabled: !!customerId,
+  });
+
+  const { data: siblingProjects } = useQuery({
+    queryKey: ['customer-projects', customerId],
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('t_projects')
+        .select('id, project_number, status, inquiry_date, work_description')
+        .eq('customer_id', customerId!)
+        .is('deleted_at', null)
+        .order('inquiry_date', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as {
+        id: string;
+        project_number: string | null;
+        status: string;
+        inquiry_date: string;
+        work_description: string;
+      }[];
+    },
+    enabled: !!customerId,
+  });
+
   const { data: photos } = usePhotos(projectId);
   const { mutateAsync: updateProject, isPending: isUpdating } = useUpdateProject();
   const { mutateAsync: deletePhoto } = useDeletePhoto();
@@ -486,7 +538,14 @@ export default function ProjectDetailPage() {
               <h3 style={{ marginBottom: '0.75rem' }}>
                 <span className="material-icons text-green-600" style={{ fontSize: 16 }}>person</span> 顧客情報
               </h3>
-              <InfoRow label="管理番号">{project.project_number}</InfoRow>
+              <InfoRow label="案件管理番号">{project.project_number}</InfoRow>
+              <InfoRow label="顧客管理番号">
+                {!customerId
+                  ? <span className="text-gray-400 text-sm">—（マスタ未紐づけ）</span>
+                  : customerMaster?.customer_number
+                    ? <span className="font-mono font-medium text-blue-700">{customerMaster.customer_number}</span>
+                    : <span className="text-gray-400 text-sm">読み込み中…</span>}
+              </InfoRow>
               <InfoRow label="顧客名">
                 {editingBasic
                   ? <input className="form-input w-full" value={String(editForm.customer_name ?? '')} onChange={(e) => setEditForm({ ...editForm, customer_name: e.target.value })} />
@@ -642,6 +701,49 @@ export default function ProjectDetailPage() {
             </div>
 
           </div>
+
+          {customerId && siblingProjects && siblingProjects.length > 0 && (
+            <div className="detail-section mt-4" style={{ padding: '1rem' }}>
+              <h3 className="mb-3 flex items-center gap-2">
+                <span className="material-icons text-gray-600" style={{ fontSize: 18 }}>history</span>
+                同一顧客の工事履歴
+              </h3>
+              <p className="text-xs text-gray-500 mb-2">顧客管理番号で紐づく全案件の一覧です。行をクリックで開きます。</p>
+              <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-left text-xs text-gray-600">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">案件番号</th>
+                      <th className="px-3 py-2 font-medium">ステータス</th>
+                      <th className="px-3 py-2 font-medium">問い合わせ日</th>
+                      <th className="px-3 py-2 font-medium">工事内容</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {siblingProjects.map((row) => (
+                      <tr
+                        key={row.id}
+                        className={`hover:bg-green-50/50 cursor-pointer ${row.id === projectId ? 'bg-green-50' : ''}`}
+                        onClick={() => row.id !== projectId && router.push(`/projects/${row.id}`)}
+                      >
+                        <td className="px-3 py-2 font-mono">{row.project_number ?? '—'}</td>
+                        <td className="px-3 py-2">
+                          {CUSTOMER_HISTORY_STATUS_LABEL[row.status] ?? row.status}
+                          {row.id === projectId && (
+                            <span className="ml-2 text-[10px] text-green-700 font-bold">現表示中</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">{fmtDate(row.inquiry_date)}</td>
+                        <td className="px-3 py-2 text-gray-600 max-w-xs truncate" title={row.work_description}>
+                          {row.work_description || '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
