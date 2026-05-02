@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 async function sendLinePush(lineUserId: string, text: string): Promise<boolean> {
@@ -25,20 +25,45 @@ async function sendLinePush(lineUserId: string, text: string): Promise<boolean> 
   return res.ok;
 }
 
-function appOriginFromEnv(): string | null {
-  const cb = process.env.NEXT_PUBLIC_LINE_LOGIN_CALLBACK_URL;
-  if (!cb) return null;
-  try {
-    return new URL(cb).origin;
-  } catch {
-    return null;
+function resolveAppBaseUrl(): string | null {
+  const tryOrigin = (raw: string): string | null => {
+    const s = raw.trim();
+    if (!s) return null;
+    try {
+      const href = /^https?:\/\//i.test(s) ? s : `https://${s}`;
+      return new URL(href).origin;
+    } catch {
+      return null;
+    }
+  };
+
+  const fromExplicit =
+    tryOrigin(process.env.NEXT_PUBLIC_APP_URL ?? '') ??
+    tryOrigin(process.env.NEXT_PUBLIC_SITE_URL ?? '');
+  if (fromExplicit) return fromExplicit;
+
+  const vercel = process.env.VERCEL_URL?.trim();
+  if (vercel) {
+    const o = tryOrigin(vercel);
+    if (o) return o;
   }
+
+  const cb = process.env.NEXT_PUBLIC_LINE_LOGIN_CALLBACK_URL?.trim();
+  if (cb) {
+    try {
+      return new URL(cb).origin;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
 }
 
 /**
  * 追客一覧から担当者へ「問い合わせから〇日経過」の LINE 通知
  */
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
@@ -105,8 +130,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const origin = appOriginFromEnv();
-  const detailLine = origin ? `\n\n案件詳細: ${origin}/projects/${project.id}` : '';
+  const base = resolveAppBaseUrl();
+  const detailLine = base
+    ? `\n\n案件詳細: ${base}/projects/${project.id}`
+    : '\n\n※案件詳細のリンクを付けるには、Vercel に NEXT_PUBLIC_APP_URL（例: https://xxx.vercel.app）を設定してください。';
 
   const text =
     `【追客リマインド】\n` +
