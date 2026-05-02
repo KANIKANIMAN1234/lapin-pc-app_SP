@@ -94,7 +94,8 @@ INSERT INTO m_settings (key, value, description) VALUES
   ('line_channel_id',              '',     'LINE Loginチャンネル ID（設定必須）'),
   ('line_channel_secret',          '',     'LINE Loginチャンネル シークレット（Vault推奨）'),
   ('header_display',               'trade', '画面ヘッダー表示（company=法人名, trade=屋号）'),
-  ('company_name',                 'ラパンリフォーム', '会社名・屋号')
+  ('company_name',                 'ラパンリフォーム', '会社名・屋号'),
+  ('drive_folder_template',        '["01_見積書","02_契約書","03_施工写真/着工前","03_施工写真/施工中","03_施工写真/完工後","04_報告書","05_請求書","06_議事メモ","07_図面・資料"]', '新規案件Driveサブフォルダ（JSON・管理画面で編集）')
 ON CONFLICT (key) DO NOTHING;
 
 -- m_bonus_periods 2026年度初期値

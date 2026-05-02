@@ -58,6 +58,21 @@ export default function Header() {
   const [attStatus, setAttStatus] = useState<AttStatus>('none');
   const [attLoading, setAttLoading] = useState(true);
   const [punching, setPunching] = useState(false);
+  const [companyBrand, setCompanyBrand] = useState('');
+
+  const loadCompanyBrand = useCallback(async () => {
+    const supabase = createClient();
+    const { data } = await supabase.from('m_settings').select('value').eq('key', 'company_name').maybeSingle();
+    const name = (data?.value as string | undefined)?.trim();
+    setCompanyBrand(name || '業務管理');
+  }, []);
+
+  useEffect(() => {
+    void loadCompanyBrand();
+    const onUpdate = () => void loadCompanyBrand();
+    window.addEventListener('company-brand-updated', onUpdate);
+    return () => window.removeEventListener('company-brand-updated', onUpdate);
+  }, [loadCompanyBrand]);
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -143,7 +158,7 @@ export default function Header() {
       <div className="header-bar-left">
         <span className="material-icons header-logo-icon">business</span>
         <div>
-          <h1 className="header-brand-title">ラパンリフォーム 業務管理システム</h1>
+          <h1 className="header-brand-title">{companyBrand || '…'} 業務管理システム</h1>
           <span className="header-brand-sub">Supabase版 v3.0</span>
         </div>
       </div>

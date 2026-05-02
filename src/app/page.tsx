@@ -1,11 +1,29 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { getLineLoginUrl } from '@/lib/auth';
 
 export default function LoginPage() {
+  const [companyName, setCompanyName] = useState<string | null>(null);
+  const [brandLoaded, setBrandLoaded] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/public/company-brand')
+      .then((r) => r.json())
+      .then((j: { company_name?: string | null }) => {
+        setCompanyName(j.company_name?.trim() || null);
+      })
+      .catch(() => setCompanyName(null))
+      .finally(() => setBrandLoaded(true));
+  }, []);
+
   const handleLineLogin = () => {
     window.location.href = getLineLoginUrl();
   };
+
+  const titleText = !brandLoaded
+    ? '業務管理システム'
+    : `${companyName || '業務管理'} 業務管理システム`;
 
   return (
     <div
@@ -20,7 +38,7 @@ export default function LoginPage() {
             business
           </span>
         </div>
-        <h1 className="text-2xl font-bold mb-2">ラパンリフォーム 業務管理システム</h1>
+        <h1 className="text-2xl font-bold mb-2">{titleText}</h1>
         <p className="text-gray-500 text-sm mb-2">LINE公式アカウント連携 業務管理</p>
         <p className="text-[10px] text-gray-400 mb-8 bg-blue-50 rounded-lg px-3 py-1.5">
           v3.0 Supabase版

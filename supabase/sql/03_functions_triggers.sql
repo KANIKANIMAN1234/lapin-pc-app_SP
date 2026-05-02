@@ -93,7 +93,7 @@ CREATE OR REPLACE TRIGGER t_bonus_updated_at
 -- ==============================================================
 -- Section 3: project_number 自動採番
 -- INSERT時に project_number が NULL の場合に自動採番
--- フォーマット: YYYY-NNN（例: 2026-001）
+-- フォーマット: YYYY-NNNN（例: 2026-0001）
 -- ==============================================================
 
 CREATE OR REPLACE FUNCTION generate_project_number()
@@ -118,7 +118,7 @@ BEGIN
   FROM t_projects
   WHERE project_number LIKE current_year || '-%';
 
-  new_number := current_year || '-' || LPAD((max_num + 1)::TEXT, 3, '0');
+  new_number := current_year || '-' || LPAD((max_num + 1)::TEXT, 4, '0');
   NEW.project_number := new_number;
 
   RETURN NEW;

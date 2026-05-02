@@ -3,7 +3,7 @@ import './globals.css';
 import QueryProvider from '@/components/providers/QueryProvider';
 
 export const metadata: Metadata = {
-  title: 'ラパンリフォーム 業務管理システム',
+  title: '業務管理システム',
   description: 'LINE公式アカウント連携 業務管理システム（Supabase版）',
 };
 

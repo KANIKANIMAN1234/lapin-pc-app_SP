@@ -1,44 +1,56 @@
 ﻿'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase';
 import type { Project } from '@/types';
 
 type TemplateType = 'thankyou' | 'seasonal' | 'campaign';
 
-const TEMPLATES = [
-  {
-    id: 'thankyou' as TemplateType,
+const DEFAULT_COMPANY = 'ラパンリフォーム';
+
+const BODY_TEMPLATES: Record<TemplateType, { label: string; icon: string; iconColor: string; body: string }> = {
+  thankyou: {
     label: 'お礼状',
     icon: 'favorite',
     iconColor: '#ef4444',
-    title: 'ラパンリフォーム',
     body: 'この度はリフォーム工事にご依頼いただき誠にありがとうございました。\n今後もお住まいのことでお気軽にご相談ください。\n今後ともどうぞよろしくお願いいたします。',
   },
-  {
-    id: 'seasonal' as TemplateType,
+  seasonal: {
     label: '季節DM',
     icon: 'pets',
     iconColor: '#374151',
-    title: 'ラパンリフォーム',
     body: '春の訪れと共に、ご挨拶申し上げます。\n季節の変わり目は外壁や屋根の点検に最適な時期です。\n無料点検も承っておりますので、お気軽にお問い合わせください。',
   },
-  {
-    id: 'campaign' as TemplateType,
+  campaign: {
     label: 'キャンペーン',
     icon: 'auto_awesome',
     iconColor: '#374151',
-    title: 'ラパンリフォーム',
     body: '春のリフォームキャンペーン実施中です。\n期間中のご契約で工事費用を最大10%割引いたします。\nこの機会にぜひご検討ください。',
   },
-];
+};
 
 export default function ThankYouPage() {
   const queryClient = useQueryClient();
   const [activeTemplate, setActiveTemplate] = useState<TemplateType>('thankyou');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [keyword, setKeyword] = useState('');
+  const [companyName, setCompanyName] = useState(DEFAULT_COMPANY);
+
+  useEffect(() => {
+    const supabase = createClient();
+    void supabase
+      .from('m_settings')
+      .select('value')
+      .eq('key', 'company_name')
+      .maybeSingle()
+      .then(({ data }) => {
+        const v = (data?.value as string | undefined)?.trim();
+        if (v) setCompanyName(v);
+      });
+  }, []);
+
+  const TEMPLATE_IDS: TemplateType[] = ['thankyou', 'seasonal', 'campaign'];
 
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ['thankyou-projects'],
@@ -71,7 +83,8 @@ export default function ThankYouPage() {
     },
   });
 
-  const template = TEMPLATES.find((t) => t.id === activeTemplate)!;
+  const template = BODY_TEMPLATES[activeTemplate];
+  const displayTitle = companyName;
 
   const filtered = projects.filter((p) => {
     if (!keyword) return true;
@@ -123,12 +136,14 @@ export default function ThankYouPage() {
         <div>
           {/* テンプレートタブ */}
           <div className="flex gap-2 mb-4">
-            {TEMPLATES.map((t) => (
+            {TEMPLATE_IDS.map((id) => {
+              const t = BODY_TEMPLATES[id];
+              return (
               <button
-                key={t.id}
-                onClick={() => setActiveTemplate(t.id)}
+                key={id}
+                onClick={() => setActiveTemplate(id)}
                 className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg border transition-colors ${
-                  activeTemplate === t.id
+                  activeTemplate === id
                     ? 'bg-green-600 text-white border-green-600'
                     : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
                 }`}
@@ -136,7 +151,8 @@ export default function ThankYouPage() {
                 <span className="material-icons text-base">{t.icon}</span>
                 {t.label}
               </button>
-            ))}
+              );
+            })}
           </div>
 
           {/* プレビュー */}
@@ -154,7 +170,7 @@ export default function ThankYouPage() {
               <div className="text-center mb-6">
                 <div className="flex items-center justify-center gap-2 mb-2">
                   <span className="material-icons text-3xl" style={{ color: template.iconColor }}>{template.icon}</span>
-                  <h3 className="text-xl font-bold">{template.title}</h3>
+                  <h3 className="text-xl font-bold">{displayTitle}</h3>
                 </div>
                 <div className="h-0.5 w-24 bg-green-600 mx-auto" />
               </div>
@@ -182,7 +198,7 @@ export default function ThankYouPage() {
               </div>
 
               <div className="text-right text-sm text-gray-600">
-                <p className="font-bold">{template.title}</p>
+                <p className="font-bold">{displayTitle}</p>
                 <p>〒350-1305 埼玉県狭山市南入曽580-1</p>
                 <p>TEL: 04-2907-5022</p>
               </div>

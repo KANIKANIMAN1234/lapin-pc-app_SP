@@ -30,6 +30,7 @@ const MASTER_DEFS = [
   { key: 'project_status_options',  label: '案件ステータス', icon: 'flag',        desc: '案件のステータス一覧（値:ラベル の形式で入力）' },
   { key: 'expense_category_options', label: '経費カテゴリ', icon: 'receipt_long', desc: '経費登録で使用するカテゴリ' },
   { key: 'meeting_type_options',    label: '商談種別',     icon: 'handshake',     desc: '商談記録で使用する種別' },
+  { key: 'drive_folder_template',   label: 'Drive 新規フォルダ構成', icon: 'folder', desc: '新規案件作成時に作るサブフォルダ。階層は / で区切る（例: 03_施工写真/着工前）。連携実装が参照します。' },
 ];
 
 function Toast({ msg, type }: { msg: string; type: 'success' | 'error' }) {
@@ -221,7 +222,13 @@ export default function AdminPage() {
     const { error } = await supabase.from('m_settings')
       .upsert({ key, value }, { onConflict: 'key' });
     if (error) showToast(`${label}の保存に失敗しました`, 'error');
-    else { showToast(`${label}を保存しました`); setCompanySettings((p) => ({ ...p, [key]: value })); }
+    else {
+      showToast(`${label}を保存しました`);
+      setCompanySettings((p) => ({ ...p, [key]: value }));
+      if (key === 'company_name' && typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('company-brand-updated'));
+      }
+    }
   };
 
   // ── マスター管理タブ ──

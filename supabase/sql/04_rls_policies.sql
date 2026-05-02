@@ -33,6 +33,10 @@ ALTER TABLE m_settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "m_settings_select" ON m_settings
   FOR SELECT USING (get_current_user_role() IN ('admin', 'staff'));
 
+-- ログイン済みユーザー全員: 閲覧可能（営業のマスタ表示・会社名ヘッダー用）
+CREATE POLICY "m_settings_select_any_logged_in" ON m_settings
+  FOR SELECT USING (auth.uid() IS NOT NULL);
+
 -- admin のみ: 変更可能
 CREATE POLICY "m_settings_admin_write" ON m_settings
   FOR ALL USING (get_current_user_role() = 'admin');

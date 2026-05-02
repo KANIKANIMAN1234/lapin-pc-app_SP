@@ -10,7 +10,7 @@
 -- --------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS t_projects (
   id                   UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_number       TEXT          UNIQUE,                   -- TRIGGER で自動採番（例: 2026-001）
+  project_number       TEXT          UNIQUE,                   -- TRIGGER で自動採番（例: 2026-0001）
   customer_name        TEXT          NOT NULL,
   customer_name_kana   TEXT,
   postal_code          TEXT,
@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS t_projects (
 );
 
 COMMENT ON TABLE  t_projects                   IS '顧客の工事案件情報（システムの中核データ）';
-COMMENT ON COLUMN t_projects.project_number    IS '管理番号（TRIGGER自動採番: YYYY-NNN形式）';
+COMMENT ON COLUMN t_projects.project_number    IS '管理番号（TRIGGER自動採番: YYYY-NNNN形式）';
 COMMENT ON COLUMN t_projects.work_type         IS '工事種別配列（例: {"外壁塗装","屋根塗装"}）';
 COMMENT ON COLUMN t_projects.gross_profit      IS '粗利額（Generated Column: contract_amount - actual_cost）';
 COMMENT ON COLUMN t_projects.gross_profit_rate IS '粗利率（Generated Column: %, 小数2桁）';
