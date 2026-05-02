@@ -9,6 +9,7 @@ import { useProject, useUpdateProject } from '@/hooks/useProjects';
 import { usePhotos, useDeletePhoto } from '@/hooks/usePhotos';
 import { useAuthStore } from '@/stores/authStore';
 import type { Photo, ProjectStatus } from '@/types';
+import { EstimateRegisterButton } from '@/components/projects/EstimateRegisterButton';
 
 // ─── 定数 ───────────────────────────────────────────────────────
 const DEFAULT_STATUS_LIST: { value: ProjectStatus; label: string }[] = [
@@ -551,19 +552,35 @@ export default function ProjectDetailPage() {
       {/* ══════════ 基本情報 ══════════ */}
       {activeTab === 'info' && (
         <div>
-          <div className="flex justify-end mb-3">
-            {editingBasic ? (
-              <div className="flex gap-2">
-                <button onClick={() => setEditingBasic(false)} className="btn-secondary text-sm">キャンセル</button>
-                <button onClick={saveEdit} className="btn-primary text-sm" disabled={isUpdating}>
-                  {isUpdating ? '保存中...' : '保存'}
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <EstimateRegisterButton
+              project={{
+                id: project.id,
+                project_number: project.project_number,
+                customer_name: project.customer_name,
+                work_description: project.work_description,
+                project_title: project.project_title ?? null,
+                drive_folder_id: project.drive_folder_id ?? null,
+              }}
+              onToast={showToast}
+              onSaved={() => {
+                queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+              }}
+            />
+            <div className="flex gap-2">
+              {editingBasic ? (
+                <>
+                  <button onClick={() => setEditingBasic(false)} className="btn-secondary text-sm">キャンセル</button>
+                  <button onClick={saveEdit} className="btn-primary text-sm" disabled={isUpdating}>
+                    {isUpdating ? '保存中...' : '保存'}
+                  </button>
+                </>
+              ) : (
+                <button onClick={startEdit} className="btn-secondary text-sm">
+                  <span className="material-icons text-base">edit</span>編集
                 </button>
-              </div>
-            ) : (
-              <button onClick={startEdit} className="btn-secondary text-sm">
-                <span className="material-icons text-base">edit</span>編集
-              </button>
-            )}
+              )}
+            </div>
           </div>
 
           {/* 3列レイアウト */}
@@ -703,6 +720,10 @@ export default function ProjectDetailPage() {
               <h3 style={{ marginBottom: '0.75rem' }}>
                 <span className="material-icons text-green-600" style={{ fontSize: 16 }}>payments</span> 金額情報
               </h3>
+              <p className="text-xs text-gray-500 mb-3 leading-relaxed border-l-2 border-emerald-200 pl-2.5">
+                原価合計は<strong className="text-gray-600">自動</strong>です（予算タブの実績＋登録経費）。
+                契約金額は契約が決まったら入力。見積PDF登録は<strong className="text-gray-600">見積金額だけ</strong>埋まります。
+              </p>
               <InfoRow label="見込み金額（概算）">
                 {editingBasic
                   ? <input type="number" className="form-input w-full" value={editForm.prospect_amount ?? 0} onChange={(e) => setEditForm({ ...editForm, prospect_amount: Number(e.target.value) })} />
@@ -742,9 +763,33 @@ export default function ProjectDetailPage() {
                   : fmtYearMonth(project.expected_revenue_month)}
               </InfoRow>
               <InfoRow label="契約金額">
-                {editingBasic
-                  ? <input type="number" className="form-input w-full" value={editForm.contract_amount ?? 0} onChange={(e) => setEditForm({ ...editForm, contract_amount: Number(e.target.value) })} />
-                  : fmtMan(project.contract_amount)}
+                {editingBasic ? (
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="number"
+                        className="form-input flex-1 min-w-[8rem]"
+                        value={editForm.contract_amount ?? 0}
+                        onChange={(e) => setEditForm({ ...editForm, contract_amount: Number(e.target.value) })}
+                      />
+                      <button
+                        type="button"
+                        className="text-xs px-2.5 py-1 rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 whitespace-nowrap"
+                        title="税抜など同一のときの入力省略用"
+                        onClick={() =>
+                          setEditForm({
+                            ...editForm,
+                            contract_amount: Number(editForm.estimated_amount) || 0,
+                          })
+                        }
+                      >
+                        見積金額をコピー
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  fmtMan(project.contract_amount)
+                )}
               </InfoRow>
               <InfoRow label="実行原価">
                 <span className="font-medium">{fmtMan(totalActualDisplayed)}</span>
