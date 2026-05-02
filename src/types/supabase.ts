@@ -492,6 +492,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
+          project_id: string | null;
           report_date: string;
           title: string | null;
           content: string;
@@ -509,6 +510,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          project_id?: string | null;
           report_date: string;
           title?: string | null;
           content: string;
@@ -522,6 +524,7 @@ export type Database = {
           deleted_at?: string | null;
         };
         Update: {
+          project_id?: string | null;
           title?: string | null;
           content?: string;
           audio_url?: string | null;

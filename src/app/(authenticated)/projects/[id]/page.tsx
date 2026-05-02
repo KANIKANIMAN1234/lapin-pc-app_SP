@@ -483,6 +483,7 @@ export default function ProjectDetailPage() {
       const { data, error } = await supabase
         .from('t_reports')
         .select(`id, report_date, title, content, achievements, issues, next_actions, submitted_at, m_users!user_id(name)`)
+        .eq('project_id', projectId)
         .is('deleted_at', null)
         .order('report_date', { ascending: false })
         .limit(100);
@@ -1121,7 +1122,7 @@ export default function ProjectDetailPage() {
         <div className="bg-white rounded-xl border border-gray-200">
           <div className="p-4 border-b border-gray-100">
             <h3 className="font-bold">日報一覧</h3>
-            <p className="text-xs text-gray-400 mt-0.5">スマホアプリから登録された日報が表示されます</p>
+            <p className="text-xs text-gray-400 mt-0.5">この案件に紐づけてスマホから登録された日報のみ表示します</p>
           </div>
           {reports.length === 0 ? (
             <div className="p-12 text-center text-gray-400">
