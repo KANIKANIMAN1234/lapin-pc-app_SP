@@ -2,7 +2,7 @@
  * Supabase Database 型定義
  *
  * テーブル命名規則:
- *   m_ = マスターテーブル（m_users, m_settings, m_bonus_periods）
+ *   m_ = マスターテーブル（m_users, m_customers, m_settings, m_bonus_periods）
  *   t_ = トランザクションテーブル（t_projects, t_photos, t_budgets, ...）
  *
  * 本番では以下のコマンドで自動生成した型に置き換えること:
@@ -127,6 +127,50 @@ export type Database = {
         Relationships: [];
       };
 
+      m_customers: {
+        Row: {
+          id: string;
+          customer_number: string | null;
+          customer_name: string;
+          customer_name_kana: string | null;
+          postal_code: string | null;
+          address: string;
+          phone: string;
+          email: string | null;
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          customer_number?: string | null;
+          customer_name: string;
+          customer_name_kana?: string | null;
+          postal_code?: string | null;
+          address: string;
+          phone: string;
+          email?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          deleted_at?: string | null;
+        };
+        Update: {
+          customer_number?: string | null;
+          customer_name?: string;
+          customer_name_kana?: string | null;
+          postal_code?: string | null;
+          address?: string;
+          phone?: string;
+          email?: string | null;
+          notes?: string | null;
+          created_by?: string | null;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
+
       // ----------------------------------------------------------
       // トランザクションテーブル（t_ プレフィックス）
       // ----------------------------------------------------------
@@ -135,6 +179,7 @@ export type Database = {
         Row: {
           id: string;
           project_number: string | null;
+          customer_id: string | null;
           customer_name: string;
           customer_name_kana: string | null;
           postal_code: string | null;
@@ -176,6 +221,7 @@ export type Database = {
         Insert: {
           id?: string;
           project_number?: string | null;
+          customer_id?: string | null;
           customer_name: string;
           customer_name_kana?: string | null;
           postal_code?: string | null;
@@ -211,6 +257,7 @@ export type Database = {
           deleted_at?: string | null;
         };
         Update: {
+          customer_id?: string | null;
           customer_name?: string;
           customer_name_kana?: string | null;
           postal_code?: string | null;
