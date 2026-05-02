@@ -76,6 +76,8 @@ export default function FollowupPage() {
   const [urgencyFilter, setUrgencyFilter] = useState<string>('all');
   const [keyword, setKeyword] = useState('');
   const [editStatusId, setEditStatusId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [notifyLoadingId, setNotifyLoadingId] = useState<string | null>(null);
 
   // ── データ取得（サービスロールAPIルート経由でRLSバイパス） ────
   const { data: projects = [], isLoading, error: fetchError } = useQuery({
@@ -121,6 +123,39 @@ export default function FollowupPage() {
       setEditStatusId(null);
     },
   });
+
+  const notifyAssignee = async (item: ProjectRow) => {
+    if (!item.assigned_to) {
+      setToast({ msg: '担当者が設定されていません', type: 'error' });
+      setTimeout(() => setToast(null), 3500);
+      return;
+    }
+    setNotifyLoadingId(item.id);
+    try {
+      const res = await fetch('/api/followup/notify-assignee', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: item.id }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
+      if (!res.ok || !json.success) {
+        throw new Error(json.error ?? `送信に失敗しました (${res.status})`);
+      }
+      setToast({
+        msg: `${item.assigned_to_name ?? '担当者'}へLINE通知を送信しました`,
+        type: 'success',
+      });
+      setTimeout(() => setToast(null), 3000);
+    } catch (e) {
+      setToast({
+        msg: e instanceof Error ? e.message : '送信に失敗しました',
+        type: 'error',
+      });
+      setTimeout(() => setToast(null), 4500);
+    } finally {
+      setNotifyLoadingId(null);
+    }
+  };
 
   // ── フィルタ ────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -169,6 +204,16 @@ export default function FollowupPage() {
 
   return (
     <div>
+      {toast && (
+        <div
+          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium max-w-md ${
+            toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+          }`}
+        >
+          {toast.msg}
+        </div>
+      )}
+
       {/* ── ヘッダー ── */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold">追客管理</h2>
@@ -289,10 +334,33 @@ export default function FollowupPage() {
                     <span className="font-bold text-gray-800 text-sm truncate">{item.customer_name}</span>
                     <span className="text-xs text-gray-400 font-mono">{item.project_number}</span>
                   </div>
-                  <Link href={`/projects/${item.id}`}
-                    className="shrink-0 flex items-center gap-1 text-xs text-green-600 hover:text-green-800 hover:underline font-medium">
-                    詳細<span className="material-icons" style={{ fontSize: 14 }}>open_in_new</span>
-                  </Link>
+                  <div className="shrink-0 flex items-center gap-2 flex-wrap justify-end">
+                    <button
+                      type="button"
+                      title={
+                        item.assigned_to
+                          ? '担当者のLINEに追客リマインドを送信'
+                          : '担当者が未設定のため送信できません'
+                      }
+                      disabled={!item.assigned_to || notifyLoadingId === item.id}
+                      onClick={() => void notifyAssignee(item)}
+                      className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-sm"
+                      style={{ backgroundColor: '#06C755', border: '1px solid #05a94a' }}
+                    >
+                      {notifyLoadingId === item.id ? (
+                        <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <span className="material-icons" style={{ fontSize: 14 }}>
+                          chat
+                        </span>
+                      )}
+                      担当者へ通知
+                    </button>
+                    <Link href={`/projects/${item.id}`}
+                      className="flex items-center gap-1 text-xs text-green-600 hover:text-green-800 hover:underline font-medium">
+                      詳細<span className="material-icons" style={{ fontSize: 14 }}>open_in_new</span>
+                    </Link>
+                  </div>
                 </div>
 
                 {/* カードボディ */}
