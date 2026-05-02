@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useProjects, useUpdateProject } from '@/hooks/useProjects';
+import { useProjects, useUpdateProject, useDeleteProject } from '@/hooks/useProjects';
 import { useAuthStore } from '@/stores/authStore';
 import { createClient } from '@/lib/supabase';
 import type { Project, ProjectStatus } from '@/types';
@@ -50,7 +50,9 @@ export default function ProjectsPage() {
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'admin';
   const isSales = user?.role === 'sales';
+  const canSoftDelete = user?.role === 'admin' || user?.role === 'staff';
   const updateProject = useUpdateProject();
+  const deleteProject = useDeleteProject();
   const [keyword, setKeyword] = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState<ProjectStatus[]>([]);
   const [selectedWorkTypes, setSelectedWorkTypes] = useState<string[]>([]);
@@ -59,6 +61,7 @@ export default function ProjectsPage() {
   const [sortKey, setSortKey] = useState<'inquiry_date' | 'contract_amount' | 'estimated_amount' | 'prospect_amount' | 'status'>('inquiry_date');
   const [sortAsc, setSortAsc] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
@@ -75,6 +78,25 @@ export default function ProjectsPage() {
       showToast('更新に失敗しました', 'error');
     }
     setUpdatingId(null);
+  };
+
+  const handleDeleteProject = async (projectId: string, customerLabel: string) => {
+    if (!canSoftDelete) return;
+    if (
+      !window.confirm(
+        `「${customerLabel}」の案件を一覧から削除しますか？\n（論理削除です。データベース上は残ります）`
+      )
+    ) {
+      return;
+    }
+    setDeletingId(projectId);
+    try {
+      await deleteProject.mutateAsync(projectId);
+      showToast('案件を削除しました');
+    } catch {
+      showToast('削除に失敗しました（権限を確認してください）', 'error');
+    }
+    setDeletingId(null);
   };
 
   // m_settings からステータス一覧・工事種別一覧を取得
@@ -314,6 +336,9 @@ export default function ProjectsPage() {
                   >
                     問い合わせ日 {sortKey === 'inquiry_date' ? (sortAsc ? '↑' : '↓') : ''}
                   </th>
+                  {canSoftDelete && (
+                    <th className="!cursor-default w-px whitespace-nowrap">削除</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -416,6 +441,33 @@ export default function ProjectsPage() {
                     <td className="text-gray-500 text-xs">
                       {project.inquiry_date}
                     </td>
+                    {canSoftDelete && (
+                      <td
+                        className="w-px whitespace-nowrap"
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-0.5 rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                          disabled={deletingId === project.id}
+                          title="論理削除（一覧から非表示）"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleDeleteProject(project.id, project.customer_name);
+                          }}
+                        >
+                          {deletingId === project.id ? (
+                            <span className="inline-block w-3.5 h-3.5 border-2 border-red-200 border-t-red-600 rounded-full animate-spin" />
+                          ) : (
+                            <>
+                              <span className="material-icons text-[14px]">delete_outline</span>
+                              削除
+                            </>
+                          )}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
