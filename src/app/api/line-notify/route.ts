@@ -5,6 +5,8 @@ import { createClient } from '@supabase/supabase-js';
 interface LineNotifyPayload {
   customerName: string;
   address: string;
+  /** 案件名（Drive フォルダラベル・プレビュー表示用） */
+  projectTitle?: string;
   workDescription?: string;
   workType: string[];
   /** 登録時の概算（円）。未指定時は estimatedAmount を見込み表示に使う（後方互換） */
@@ -103,6 +105,9 @@ function buildProjectFlex(data: LineNotifyPayload): object {
       paddingAll: '16px',
       contents: [
         { type: 'text', text: data.customerName, weight: 'bold', size: 'xl', color: '#333333' },
+        ...(data.projectTitle?.trim()
+          ? [{ type: 'text' as const, text: data.projectTitle.trim(), size: 'sm' as const, color: '#555555', margin: 'sm' as const, wrap: true }]
+          : []),
         { type: 'separator', margin: 'md' },
         infoRow('住所', data.address),
         ...(data.workDescription ? [infoRow('案件概要', data.workDescription)] : []),
@@ -142,6 +147,7 @@ function buildTextMessage(data: LineNotifyPayload): string {
   return (
     `📋【新規案件登録】\n━━━━━━━━━━━━━━\n` +
     `顧客名: ${data.customerName}\n` +
+    (data.projectTitle?.trim() ? `案件名: ${data.projectTitle.trim()}\n` : '') +
     `住所: ${data.address}\n` +
     (data.workDescription ? `案件概要: ${data.workDescription}\n` : '') +
     `工事種別: ${data.workType.join('・')}\n` +
