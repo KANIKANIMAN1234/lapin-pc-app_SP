@@ -135,6 +135,27 @@ export default function NewProjectPage() {
       if (custErr) throw custErr;
       if (!cust?.id) throw new Error('顧客マスタの作成に失敗しました');
 
+      try {
+        const syncRes = await fetch('/api/sync-customer-drives', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ customerId: cust.id }),
+        });
+        const syncJson = (await syncRes.json().catch(() => ({}))) as {
+          success?: boolean;
+          skipped?: boolean;
+          error?: string;
+        };
+        if (!syncRes.ok) {
+          console.warn('[new-project] sync-customer-drives HTTP', syncRes.status, syncJson);
+        } else if (syncJson.success === false && !syncJson.skipped) {
+          console.warn('[new-project] sync-customer-drives', syncJson.error ?? syncJson);
+        }
+      } catch (e) {
+        console.error('[new-project] sync-customer-drives', e);
+      }
+
       const addressQuery = [form.postal_code, form.address].filter(Boolean).join(' ').trim();
       const coords = await geocodeAddress(addressQuery || form.address);
 
