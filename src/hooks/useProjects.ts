@@ -166,8 +166,22 @@ export function useDeleteProject() {
       const { error } = await supabase
         .from('t_projects')
         .update({ deleted_at: new Date().toISOString() })
-        .eq('id', id);
+        .eq('id', id)
+        .is('deleted_at', null);
       if (error) throw error;
+
+      const { count, error: verifyErr } = await supabase
+        .from('t_projects')
+        .select('id', { count: 'exact', head: true })
+        .eq('id', id)
+        .is('deleted_at', null);
+
+      if (verifyErr) throw verifyErr;
+      if (count != null && count > 0) {
+        throw new Error(
+          '案件を削除できませんでした（権限がない、または対象行が見つかりません）'
+        );
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });

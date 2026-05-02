@@ -81,7 +81,10 @@ export default function ProjectsPage() {
   };
 
   const handleDeleteProject = async (projectId: string, customerLabel: string) => {
-    if (!canSoftDelete) return;
+    if (!canSoftDelete) {
+      showToast('この操作は管理者・スタッフのみ実行できます', 'error');
+      return;
+    }
     if (
       !window.confirm(
         `「${customerLabel}」の案件を一覧から削除しますか？\n（論理削除です。データベース上は残ります）`
@@ -93,8 +96,9 @@ export default function ProjectsPage() {
     try {
       await deleteProject.mutateAsync(projectId);
       showToast('案件を削除しました');
-    } catch {
-      showToast('削除に失敗しました（権限を確認してください）', 'error');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      showToast(msg.includes('削除できません') ? msg : `削除に失敗しました: ${msg}`, 'error');
     }
     setDeletingId(null);
   };
@@ -380,10 +384,13 @@ export default function ProjectsPage() {
                   <tr
                     key={project.id}
                     tabIndex={0}
-                    role="link"
-                    aria-label={`${project.customer_name} の詳細を開く`}
+                    aria-label={`${project.customer_name} の行。行をクリックで詳細を開く`}
                     className="cursor-pointer hover:bg-green-50/60 transition-colors"
-                    onClick={() => router.push(`/projects/${project.id}`)}
+                    onClick={(e) => {
+                      const el = e.target as HTMLElement;
+                      if (el.closest('button, a, select, input, textarea, label')) return;
+                      router.push(`/projects/${project.id}`);
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
@@ -476,18 +483,16 @@ export default function ProjectsPage() {
                       {project.inquiry_date}
                     </td>
                     {canSoftDelete && (
-                      <td
-                        className="w-px whitespace-nowrap"
-                        onClick={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
-                      >
+                      <td className="w-px whitespace-nowrap">
                         <button
                           type="button"
                           className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-white p-1.5 text-red-600 hover:bg-red-50"
                           disabled={deletingId === project.id}
                           title="論理削除（一覧から非表示）"
                           aria-label={`${project.customer_name}の案件を一覧から削除`}
+                          onMouseDown={(e) => e.stopPropagation()}
                           onClick={(e) => {
+                            e.preventDefault();
                             e.stopPropagation();
                             void handleDeleteProject(project.id, project.customer_name);
                           }}
