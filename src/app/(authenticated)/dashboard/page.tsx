@@ -110,38 +110,7 @@ function ManagementTab() {
   const { start, end } = useMemo(() => getPeriodDates(period), [period]);
   const { data, isLoading, error } = useDashboard(start, end, user?.id);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="spinner" /><p className="ml-3 text-gray-500">読み込み中...</p>
-      </div>
-    );
-  }
-
-  if (error || !data) {
-    return (
-      <div className="text-center py-16 text-gray-500">
-        <span className="material-icons text-5xl mb-2">cloud_off</span>
-        <p>ダッシュボードデータの取得に失敗しました</p>
-      </div>
-    );
-  }
-
-  const kpi = data.kpi;
-  const bonus = data.bonus_progress;
-
-  const kpiItems = [
-    { title: '担当案件数', value: String(kpi.assigned_projects_count), unit: '件' },
-    { title: '見込み金額', value: formatYen(kpi.assigned_projects_amount), unit: '' },
-    { title: '見積もり数', value: String(kpi.sent_estimates_count), unit: '件' },
-    { title: '送客金額', value: formatYen(kpi.sent_estimates_amount), unit: '' },
-    { title: '契約数', value: String(kpi.contract_count), unit: '件' },
-    { title: '契約平均単価', value: kpi.average_contract_amount > 0 ? formatYen(kpi.average_contract_amount) : '-', unit: '' },
-    { title: '契約率', value: String(kpi.contract_rate), unit: '%' },
-    { title: '粗利率', value: String(kpi.gross_profit_rate), unit: '%' },
-  ];
-
-  const performanceTrend = data.charts?.performance_trend ?? [];
+  const performanceTrend = data?.charts?.performance_trend ?? [];
   const performanceBarChart = useMemo(() => {
     if (salesMode === 'year') {
       const sumEst = performanceTrend.reduce((s, r) => s + r.estimate_presented, 0);
@@ -179,6 +148,37 @@ function ManagementTab() {
       profit_amount: performanceTrend.map((r) => r.profit_amount),
     };
   }, [performanceTrend, salesMode]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="spinner" /><p className="ml-3 text-gray-500">読み込み中...</p>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="text-center py-16 text-gray-500">
+        <span className="material-icons text-5xl mb-2">cloud_off</span>
+        <p>ダッシュボードデータの取得に失敗しました</p>
+      </div>
+    );
+  }
+
+  const kpi = data.kpi;
+  const bonus = data.bonus_progress;
+
+  const kpiItems = [
+    { title: '担当案件数', value: String(kpi.assigned_projects_count), unit: '件' },
+    { title: '見込み金額', value: formatYen(kpi.assigned_projects_amount), unit: '' },
+    { title: '見積もり数', value: String(kpi.sent_estimates_count), unit: '件' },
+    { title: '送客金額', value: formatYen(kpi.sent_estimates_amount), unit: '' },
+    { title: '契約数', value: String(kpi.contract_count), unit: '件' },
+    { title: '契約平均単価', value: kpi.average_contract_amount > 0 ? formatYen(kpi.average_contract_amount) : '-', unit: '' },
+    { title: '契約率', value: String(kpi.contract_rate), unit: '%' },
+    { title: '粗利率', value: String(kpi.gross_profit_rate), unit: '%' },
+  ];
 
   const performanceBarChartConfig = {
     labels: performanceBarChart.labels,
