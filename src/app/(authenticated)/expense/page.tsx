@@ -4,8 +4,10 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
-
-const DEFAULT_CATEGORIES = ['材料費', '交通費', '外注費', '消耗品費', '接待交際費', 'その他'];
+import {
+  parseExpenseCategoryOptions,
+  pickDefaultExpenseCategory,
+} from '@/lib/expenseCategoryOptions';
 
 interface ExpenseRow {
   id: string;
@@ -38,7 +40,7 @@ export default function ExpensePage() {
     project_id: '',
     amount: '',
     date: new Date().toISOString().substring(0, 10),
-    category: 'その他',
+    category: pickDefaultExpenseCategory(parseExpenseCategoryOptions(null)),
     memo: '',
   });
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -68,6 +70,29 @@ export default function ExpensePage() {
         }
       });
   }, []);
+
+  const { data: expenseCategories = parseExpenseCategoryOptions(null) } = useQuery({
+    queryKey: ['m_settings', 'expense_category_options'],
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from('m_settings')
+        .select('value')
+        .eq('key', 'expense_category_options')
+        .maybeSingle();
+      return parseExpenseCategoryOptions(data?.value ?? null);
+    },
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    if (!expenseCategories.length) return;
+    setForm((f) =>
+      expenseCategories.includes(f.category)
+        ? f
+        : { ...f, category: pickDefaultExpenseCategory(expenseCategories) }
+    );
+  }, [expenseCategories]);
 
   // 経費一覧（案件情報JOIN）
   const { data: expenses, isLoading } = useQuery({
@@ -289,7 +314,7 @@ export default function ExpensePage() {
                   onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
                   className="form-input"
                 >
-                  {DEFAULT_CATEGORIES.map((c) => (
+                  {expenseCategories.map((c) => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
