@@ -62,6 +62,13 @@ function fmtMan(v: number | null | undefined) {
 function fmtDate(d: string | null | undefined) {
   return d ? String(d).substring(0, 10) : '-';
 }
+/** 月初日保存の DATE を YYYY年MM月 で表示 */
+function fmtYearMonth(d: string | null | undefined) {
+  if (!d) return '-';
+  const s = String(d).substring(0, 7);
+  if (s.length < 7) return '-';
+  return `${s.slice(0, 4)}年${s.slice(5, 7)}月`;
+}
 function meetingBadge(type: string) {
   const map: Record<string, string> = {
     '初回商談': 'bg-blue-50 text-blue-700',
@@ -209,6 +216,7 @@ export default function ProjectDetailPage() {
       work_description: project.work_description ?? '',
       acquisition_route: project.acquisition_route ?? '',
       inquiry_date:    project.inquiry_date  ? String(project.inquiry_date).substring(0, 10)  : '',
+      estimate_date:   project.estimate_date ? String(project.estimate_date).substring(0, 10) : '',
       contract_date:   project.contract_date ? String(project.contract_date).substring(0, 10) : '',
       start_date:      project.start_date    ? String(project.start_date).substring(0, 10)    : '',
       completion_date: project.completion_date ? String(project.completion_date).substring(0, 10) : '',
@@ -217,6 +225,13 @@ export default function ProjectDetailPage() {
       contract_amount:  project.contract_amount ?? 0,
       notes:           project.notes ?? '',
       assigned_to:     project.assigned_to ?? '',
+      implementation_period: project.implementation_period ?? '',
+      expected_order_month: project.expected_order_month
+        ? String(project.expected_order_month).substring(0, 7)
+        : '',
+      expected_revenue_month: project.expected_revenue_month
+        ? String(project.expected_revenue_month).substring(0, 7)
+        : '',
     });
     setEditWorkType(project.work_type ?? []);
     setEditingBasic(true);
@@ -229,6 +244,7 @@ export default function ProjectDetailPage() {
         ...editForm,
         work_type: editWorkType,
         inquiry_date:    String(editForm.inquiry_date    || ''),
+        estimate_date:   editForm.estimate_date ? String(editForm.estimate_date) : null,
         contract_date:   editForm.contract_date   ? String(editForm.contract_date)   : undefined,
         start_date:      editForm.start_date      ? String(editForm.start_date)      : undefined,
         completion_date: editForm.completion_date ? String(editForm.completion_date) : undefined,
@@ -237,6 +253,13 @@ export default function ProjectDetailPage() {
         contract_amount:  editForm.contract_amount !== '' && editForm.contract_amount != null
           ? Number(editForm.contract_amount)
           : undefined,
+        implementation_period: String(editForm.implementation_period ?? '').trim() || null,
+        expected_order_month: editForm.expected_order_month
+          ? `${String(editForm.expected_order_month)}-01`
+          : null,
+        expected_revenue_month: editForm.expected_revenue_month
+          ? `${String(editForm.expected_revenue_month)}-01`
+          : null,
       };
       const inferred = statusInferredFromAmounts(
         project.status,
@@ -685,10 +708,38 @@ export default function ProjectDetailPage() {
                   ? <input type="number" className="form-input w-full" value={editForm.prospect_amount ?? 0} onChange={(e) => setEditForm({ ...editForm, prospect_amount: Number(e.target.value) })} />
                   : fmtMan(project.prospect_amount)}
               </InfoRow>
+              <InfoRow label="見積提示日">
+                {editingBasic
+                  ? <input type="date" className="form-input w-full" value={String(editForm.estimate_date ?? '')} onChange={(e) => setEditForm({ ...editForm, estimate_date: e.target.value })} />
+                  : fmtDate(project.estimate_date)}
+              </InfoRow>
               <InfoRow label="見積金額（提示後）">
                 {editingBasic
                   ? <input type="number" className="form-input w-full" value={editForm.estimated_amount ?? 0} onChange={(e) => setEditForm({ ...editForm, estimated_amount: Number(e.target.value) })} />
                   : fmtMan(project.estimated_amount)}
+              </InfoRow>
+              <InfoRow label="実施時期（予定）">
+                {editingBasic
+                  ? (
+                    <input
+                      type="text"
+                      className="form-input w-full"
+                      placeholder="例: 2026年春〜夏、3月着工予定 など"
+                      value={String(editForm.implementation_period ?? '')}
+                      onChange={(e) => setEditForm({ ...editForm, implementation_period: e.target.value })}
+                    />
+                  )
+                  : (project.implementation_period?.trim() ? project.implementation_period : '-')}
+              </InfoRow>
+              <InfoRow label="受注予定月">
+                {editingBasic
+                  ? <input type="month" className="form-input w-full" value={String(editForm.expected_order_month ?? '')} onChange={(e) => setEditForm({ ...editForm, expected_order_month: e.target.value })} />
+                  : fmtYearMonth(project.expected_order_month)}
+              </InfoRow>
+              <InfoRow label="売上（完工）予定月">
+                {editingBasic
+                  ? <input type="month" className="form-input w-full" value={String(editForm.expected_revenue_month ?? '')} onChange={(e) => setEditForm({ ...editForm, expected_revenue_month: e.target.value })} />
+                  : fmtYearMonth(project.expected_revenue_month)}
               </InfoRow>
               <InfoRow label="契約金額">
                 {editingBasic

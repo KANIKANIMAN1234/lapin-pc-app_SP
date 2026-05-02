@@ -125,39 +125,57 @@ function ManagementTab() {
   const performanceTrend = data?.charts?.performance_trend ?? [];
   const performanceBarChart = useMemo(() => {
     if (salesMode === 'year') {
-      const sumEst = performanceTrend.reduce((s, r) => s + r.estimate_presented, 0);
+      const sumPros = performanceTrend.reduce((s, r) => s + r.prospect_amount, 0);
+      const sumEst = performanceTrend.reduce((s, r) => s + r.estimate_amount, 0);
       const sumCon = performanceTrend.reduce((s, r) => s + r.contract_amount, 0);
-      const sumComp = performanceTrend.reduce((s, r) => s + r.completed_amount, 0);
-      const sumProfit = performanceTrend.reduce((s, r) => s + r.profit_amount, 0);
+      const lastCum =
+        performanceTrend.length > 0
+          ? performanceTrend[performanceTrend.length - 1].gross_profit_cumulative
+          : 0;
       return {
         labels: ['前々年度', '前年度', '今年度'],
-        estimate_presented: [0, 0, sumEst],
+        prospect_amount: [0, 0, sumPros],
+        estimate_amount: [0, 0, sumEst],
         contract_amount: [0, 0, sumCon],
-        completed_amount: [0, 0, sumComp],
-        profit_amount: [0, 0, sumProfit],
+        gross_profit_cumulative: [0, 0, lastCum],
       };
     }
     if (salesMode === 'quarter') {
       const qLabels = ['Q1 (4-6月)', 'Q2 (7-9月)', 'Q3 (10-12月)', 'Q4 (1-3月)'];
-      const estimate_presented = [0, 0, 0, 0];
+      const prospect_amount = [0, 0, 0, 0];
+      const estimate_amount = [0, 0, 0, 0];
       const contract_amount = [0, 0, 0, 0];
-      const completed_amount = [0, 0, 0, 0];
-      const profit_amount = [0, 0, 0, 0];
+      const gross_profit_cumulative = [0, 0, 0, 0];
       performanceTrend.forEach((r) => {
         const qi = fiscalQuarterIndex(r.month);
-        estimate_presented[qi] += r.estimate_presented;
+        prospect_amount[qi] += r.prospect_amount;
+        estimate_amount[qi] += r.estimate_amount;
         contract_amount[qi] += r.contract_amount;
-        completed_amount[qi] += r.completed_amount;
-        profit_amount[qi] += r.profit_amount;
       });
-      return { labels: qLabels, estimate_presented, contract_amount, completed_amount, profit_amount };
+      for (let qi = 0; qi < 4; qi++) {
+        const monthsInQ = performanceTrend
+          .filter((r) => fiscalQuarterIndex(r.month) === qi)
+          .map((r) => r.month)
+          .sort((a, b) => a.localeCompare(b));
+        const last = monthsInQ[monthsInQ.length - 1];
+        gross_profit_cumulative[qi] = last
+          ? performanceTrend.find((r) => r.month === last)?.gross_profit_cumulative ?? 0
+          : 0;
+      }
+      return {
+        labels: qLabels,
+        prospect_amount,
+        estimate_amount,
+        contract_amount,
+        gross_profit_cumulative,
+      };
     }
     return {
       labels: performanceTrend.map((r) => r.month),
-      estimate_presented: performanceTrend.map((r) => r.estimate_presented),
+      prospect_amount: performanceTrend.map((r) => r.prospect_amount),
+      estimate_amount: performanceTrend.map((r) => r.estimate_amount),
       contract_amount: performanceTrend.map((r) => r.contract_amount),
-      completed_amount: performanceTrend.map((r) => r.completed_amount),
-      profit_amount: performanceTrend.map((r) => r.profit_amount),
+      gross_profit_cumulative: performanceTrend.map((r) => r.gross_profit_cumulative),
     };
   }, [performanceTrend, salesMode]);
 
@@ -196,8 +214,20 @@ function ManagementTab() {
     labels: performanceBarChart.labels,
     datasets: [
       {
-        label: '見積提示金額',
-        data: performanceBarChart.estimate_presented,
+        label: '見込み金額',
+        data: performanceBarChart.prospect_amount,
+        borderColor: '#6366f1',
+        backgroundColor: 'rgba(99, 102, 241, 0.08)',
+        borderWidth: 2,
+        tension: 0.25,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        pointBackgroundColor: '#6366f1',
+        fill: false,
+      },
+      {
+        label: '見積もり金額',
+        data: performanceBarChart.estimate_amount,
         borderColor: '#2563eb',
         backgroundColor: 'rgba(59, 130, 246, 0.08)',
         borderWidth: 2,
@@ -220,20 +250,8 @@ function ManagementTab() {
         fill: false,
       },
       {
-        label: '完了金額',
-        data: performanceBarChart.completed_amount,
-        borderColor: '#d97706',
-        backgroundColor: 'rgba(245, 158, 11, 0.1)',
-        borderWidth: 2,
-        tension: 0.25,
-        pointRadius: 3,
-        pointHoverRadius: 5,
-        pointBackgroundColor: '#d97706',
-        fill: false,
-      },
-      {
-        label: '利益金額',
-        data: performanceBarChart.profit_amount,
+        label: '粗利益金額（累計）',
+        data: performanceBarChart.gross_profit_cumulative,
         borderColor: '#dc2626',
         backgroundColor: 'rgba(239, 68, 68, 0.08)',
         borderWidth: 2,
@@ -439,7 +457,12 @@ function ManagementTab() {
       <div className="charts-grid">
         <div className="chart-card chart-card-wide">
           <div className="chart-header">
-            <h3 className="font-bold">業績推移</h3>
+            <div>
+              <h3 className="font-bold">業績推移</h3>
+              <p className="text-xs text-gray-500 mt-1 leading-snug max-w-xl">
+                問合せ月ベースの見込み・見積提示日ベースの見積・契約月ベースの契約金額。粗利益は契約月末以前に受注した案件の粗利（契約額−実コスト）を月次で累積したものです。
+              </p>
+            </div>
             <div className="chart-period-tabs">
               {([['month', '月'], ['quarter', '四半期'], ['year', '年']] as const).map(([mode, label]) => (
                 <button

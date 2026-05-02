@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useProjects, useUpdateProject, useDeleteProject } from '@/hooks/useProjects';
@@ -189,6 +189,22 @@ export default function ProjectsPage() {
     else { setSortKey(key); setSortAsc(false); }
   };
 
+  const listTotals = useMemo(
+    () =>
+      sorted.reduce(
+        (acc, p) => ({
+          prospect: acc.prospect + (Number(p.prospect_amount) || 0),
+          estimated: acc.estimated + (Number(p.estimated_amount) || 0),
+          contract: acc.contract + (Number(p.contract_amount) || 0),
+        }),
+        { prospect: 0, estimated: 0, contract: 0 }
+      ),
+    [sorted]
+  );
+
+  const colspanBeforeAmounts = isAdmin ? 6 : 5;
+  const colspanAfterAmounts = (canSoftDelete ? 2 : 1);
+
   return (
     <div>
       {/* トースト */}
@@ -299,6 +315,24 @@ export default function ProjectsPage() {
           <div className="overflow-x-auto">
             <table className="data-table">
               <thead>
+                <tr className="bg-green-50/90 border-b border-green-100">
+                  <th
+                    colSpan={colspanBeforeAmounts}
+                    className="!text-left text-xs font-semibold text-green-800 whitespace-nowrap"
+                  >
+                    表示中の合計（{sorted.length}件）
+                  </th>
+                  <th className="!text-right text-sm font-bold tabular-nums text-green-900 whitespace-nowrap">
+                    {fmtMan(listTotals.prospect)}
+                  </th>
+                  <th className="!text-right text-sm font-bold tabular-nums text-green-900 whitespace-nowrap">
+                    {fmtMan(listTotals.estimated)}
+                  </th>
+                  <th className="!text-right text-sm font-bold tabular-nums text-green-900 whitespace-nowrap">
+                    {fmtMan(listTotals.contract)}
+                  </th>
+                  <th colSpan={colspanAfterAmounts} className="!cursor-default" aria-hidden />
+                </tr>
                 <tr>
                   <th>案件番号</th>
                   <th>顧客名</th>

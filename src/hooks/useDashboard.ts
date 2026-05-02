@@ -15,6 +15,27 @@ export interface DashboardData {
   };
 }
 
+function nextMonthYm(ym: string): string {
+  const [y, m] = ym.split('-').map(Number);
+  if (m === 12) return `${y + 1}-01`;
+  return `${y}-${String(m + 1).padStart(2, '0')}`;
+}
+
+/** min/max の YYYY-MM を含む連続した月列（累計粗利の推移表示用） */
+function expandMonthRangeInclusive(minYm: string, maxYm: string): string[] {
+  if (!minYm || !maxYm || minYm > maxYm) return [];
+  const out: string[] = [];
+  let cur = minYm;
+  for (;;) {
+    out.push(cur);
+    if (cur === maxYm) break;
+    cur = nextMonthYm(cur);
+  }
+  return out;
+}
+
+const ACTIVE_CONTRACT_STATUSES = new Set(['contract', 'in_progress', 'completed']);
+
 /**
  * ダッシュボード集計データを Supabase から直接集計して取得する
  */
@@ -58,54 +79,61 @@ export function useDashboard(startDate: string, endDate: string, userId?: string
       const gross_profit_amount = withGrossProfit.reduce((s, p) => s + (p.gross_profit || 0), 0);
       const gross_profit_rate = contract_amount > 0 ? Math.round((gross_profit_amount / contract_amount) * 100 * 10) / 10 : 0;
 
-      // 業績推移（4系列・月次キーに正規化後ダッシュボードで四半期/年へ集約）
-      const estimatePresentedByMonth: Record<string, number> = {};
+      // 業績推移: 見込み（問合せ月）／見積（見積提示日の月）／契約（契約月）／粗利累計（契約月末以前の案件の現在粗利合計）
+      const prospectByMonth: Record<string, number> = {};
+      const estimateByMonth: Record<string, number> = {};
       const contractAmtByMonth: Record<string, number> = {};
-      const completedAmtByMonth: Record<string, number> = {};
-      const profitByMonth: Record<string, number> = {};
 
       pj.forEach((p) => {
-        const est = Number(p.estimated_amount) || 0;
-        if (est > 0) {
-          const d = p.estimate_date || p.inquiry_date;
-          if (d) {
-            const month = String(d).substring(0, 7);
-            estimatePresentedByMonth[month] = (estimatePresentedByMonth[month] || 0) + est;
-          }
+        const pr = Number(p.prospect_amount) || 0;
+        if (pr > 0 && p.inquiry_date) {
+          const month = String(p.inquiry_date).substring(0, 7);
+          prospectByMonth[month] = (prospectByMonth[month] || 0) + pr;
         }
       });
 
-      contracts.forEach((p) => {
-        if (!p.contract_date) return;
-        const month = p.contract_date.substring(0, 7);
-        contractAmtByMonth[month] = (contractAmtByMonth[month] || 0) + (Number(p.contract_amount) || 0);
+      pj.forEach((p) => {
+        const est = Number(p.estimated_amount) || 0;
+        if (est <= 0 || !p.estimate_date) return;
+        const month = String(p.estimate_date).substring(0, 7);
+        estimateByMonth[month] = (estimateByMonth[month] || 0) + est;
       });
 
       pj.forEach((p) => {
-        if (p.status !== 'completed') return;
-        const d = p.completion_date || p.contract_date;
-        if (!d) return;
-        const month = String(d).substring(0, 7);
-        completedAmtByMonth[month] = (completedAmtByMonth[month] || 0) + (Number(p.contract_amount) || 0);
-        profitByMonth[month] = (profitByMonth[month] || 0) + (Number(p.gross_profit) || 0);
+        if (!p.contract_date || !ACTIVE_CONTRACT_STATUSES.has(String(p.status))) return;
+        const month = String(p.contract_date).substring(0, 7);
+        contractAmtByMonth[month] = (contractAmtByMonth[month] || 0) + (Number(p.contract_amount) || 0);
       });
 
-      const trendMonthKeys = [
+      const rawKeys = [
         ...new Set([
-          ...Object.keys(estimatePresentedByMonth),
+          ...Object.keys(prospectByMonth),
+          ...Object.keys(estimateByMonth),
           ...Object.keys(contractAmtByMonth),
-          ...Object.keys(completedAmtByMonth),
-          ...Object.keys(profitByMonth),
         ]),
       ].sort((a, b) => a.localeCompare(b));
 
-      const performance_trend: PerformanceTrendPoint[] = trendMonthKeys.map((month) => ({
-        month,
-        estimate_presented: estimatePresentedByMonth[month] || 0,
-        contract_amount: contractAmtByMonth[month] || 0,
-        completed_amount: completedAmtByMonth[month] || 0,
-        profit_amount: profitByMonth[month] || 0,
-      }));
+      const trendMonthKeys =
+        rawKeys.length === 0 ? [] : expandMonthRangeInclusive(rawKeys[0], rawKeys[rawKeys.length - 1]);
+
+      const performance_trend: PerformanceTrendPoint[] = trendMonthKeys.map((month) => {
+        const gross_profit_cumulative = pj
+          .filter(
+            (p) =>
+              p.contract_date &&
+              ACTIVE_CONTRACT_STATUSES.has(String(p.status)) &&
+              String(p.contract_date).substring(0, 7) <= month
+          )
+          .reduce((s, p) => s + (Number(p.gross_profit) || 0), 0);
+
+        return {
+          month,
+          prospect_amount: prospectByMonth[month] || 0,
+          estimate_amount: estimateByMonth[month] || 0,
+          contract_amount: contractAmtByMonth[month] || 0,
+          gross_profit_cumulative,
+        };
+      });
 
       // 集客ルート別
       const routeMap: Record<string, { count: number; amount: number }> = {};

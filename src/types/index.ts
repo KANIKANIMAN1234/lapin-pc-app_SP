@@ -49,7 +49,14 @@ export interface Project {
   contract_date?: string;
   start_date?: string;
   completion_date?: string;
-  estimate_date?: string;
+  /** 見積書提示日（見積金額が業績推移に載る月の基準） */
+  estimate_date?: string | null;
+  /** 実施時期（見積時の想定） */
+  implementation_period?: string | null;
+  /** 受注予定月（YYYY-MM-DD の月初推奨） */
+  expected_order_month?: string | null;
+  /** 売上・完工予定月 */
+  expected_revenue_month?: string | null;
   planned_budget?: number;
   actual_budget?: number;
   actual_cost?: number;
@@ -190,14 +197,17 @@ export interface DashboardKPI {
 /** 業績推移チャート用。月キー YYYY-MM ごとの4指標 */
 export interface PerformanceTrendPoint {
   month: string;
-  /** 見積提示相当: estimated_amount 合計（estimate_date 優先、なければ inquiry の月） */
-  estimate_presented: number;
-  /** 契約ベース: contract_date の月 × 契約金額 */
+  /** 問合せ月×見込み金額（prospect_amount） */
+  prospect_amount: number;
+  /** 見積提示月（estimate_date）× 見積金額 */
+  estimate_amount: number;
+  /** 契約月×契約金額 */
   contract_amount: number;
-  /** 完工ベース: ステータス完了、completion_date（なければ contract_date）の月 × 契約金額 */
-  completed_amount: number;
-  /** 利益: 完了案件の粗利（gross_profit）を同上の月で集計 */
-  profit_amount: number;
+  /**
+   * その月末時点の粗利累計（契約日が当月末以前かつ契約/施工中/完成の案件の gross_profit 合計。
+   * gross_profit は DB 上 contract_amount - actual_cost でリアルタイム更新）。
+   */
+  gross_profit_cumulative: number;
 }
 
 export interface AcquisitionRouteData {

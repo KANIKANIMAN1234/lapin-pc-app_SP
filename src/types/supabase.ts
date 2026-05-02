@@ -204,6 +204,9 @@ export type Database = {
           contract_date: string | null;
           start_date: string | null;
           completion_date: string | null;
+          implementation_period: string | null;
+          expected_order_month: string | null;
+          expected_revenue_month: string | null;
           planned_budget: number | null;
           actual_budget: number | null;
           thankyou_flag: boolean;
@@ -245,6 +248,9 @@ export type Database = {
           contract_date?: string | null;
           start_date?: string | null;
           completion_date?: string | null;
+          implementation_period?: string | null;
+          expected_order_month?: string | null;
+          expected_revenue_month?: string | null;
           planned_budget?: number | null;
           actual_budget?: number | null;
           thankyou_flag?: boolean;
@@ -282,6 +288,9 @@ export type Database = {
           contract_date?: string | null;
           start_date?: string | null;
           completion_date?: string | null;
+          implementation_period?: string | null;
+          expected_order_month?: string | null;
+          expected_revenue_month?: string | null;
           planned_budget?: number | null;
           actual_budget?: number | null;
           thankyou_flag?: boolean;
