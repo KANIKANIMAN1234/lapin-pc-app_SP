@@ -28,10 +28,10 @@ const STATUS_CSS: Record<string, string> = {
   lost:           'status-lost',
 };
 
-function formatYen(v: number | undefined) {
+function fmtMan(v: number | null | undefined) {
   if (v == null) return '-';
-  if (v >= 10000) return `${Math.floor(v / 10000).toLocaleString()}万円`;
-  return `${v.toLocaleString()}円`;
+  const man = Number(v) / 10000;
+  return `${man.toFixed(1)}万`;
 }
 
 const STATUS_BG: Record<string, string> = {
@@ -54,7 +54,7 @@ export default function ProjectsPage() {
   const [selectedWorkTypes, setSelectedWorkTypes] = useState<string[]>([]);
   // 営業担当は初期状態で自分の案件のみ表示
   const [myOnly, setMyOnly] = useState(isSales);
-  const [sortKey, setSortKey] = useState<'inquiry_date' | 'contract_amount' | 'estimated_amount' | 'status'>('inquiry_date');
+  const [sortKey, setSortKey] = useState<'inquiry_date' | 'contract_amount' | 'estimated_amount' | 'prospect_amount' | 'status'>('inquiry_date');
   const [sortAsc, setSortAsc] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -155,6 +155,7 @@ export default function ProjectsPage() {
     if (sortKey === 'inquiry_date') cmp = a.inquiry_date.localeCompare(b.inquiry_date);
     else if (sortKey === 'contract_amount') cmp = (a.contract_amount ?? 0) - (b.contract_amount ?? 0);
     else if (sortKey === 'estimated_amount') cmp = (a.estimated_amount ?? 0) - (b.estimated_amount ?? 0);
+    else if (sortKey === 'prospect_amount') cmp = (a.prospect_amount ?? 0) - (b.prospect_amount ?? 0);
     else if (sortKey === 'status') cmp = statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status);
     return sortAsc ? cmp : -cmp;
   });
@@ -288,6 +289,12 @@ export default function ProjectsPage() {
                     ステータス {sortKey === 'status' ? (sortAsc ? '↑' : '↓') : ''}
                   </th>
                   <th
+                    onClick={() => handleSort('prospect_amount')}
+                    className="cursor-pointer select-none text-right"
+                  >
+                    見込み金額 {sortKey === 'prospect_amount' ? (sortAsc ? '↑' : '↓') : ''}
+                  </th>
+                  <th
                     onClick={() => handleSort('estimated_amount')}
                     className="cursor-pointer select-none text-right"
                   >
@@ -381,10 +388,13 @@ export default function ProjectsPage() {
                       )}
                     </td>
                     <td className="text-right font-medium">
-                      {formatYen(project.estimated_amount)}
+                      {fmtMan(project.prospect_amount)}
                     </td>
                     <td className="text-right font-medium">
-                      {formatYen(project.contract_amount)}
+                      {fmtMan(project.estimated_amount)}
+                    </td>
+                    <td className="text-right font-medium">
+                      {fmtMan(project.contract_amount)}
                     </td>
                     <td className="text-gray-500 text-xs">
                       {project.inquiry_date}

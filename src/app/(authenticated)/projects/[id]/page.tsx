@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase';
+import { statusInferredFromAmounts } from '@/lib/projectStatusFromAmounts';
 import { useProject, useUpdateProject } from '@/hooks/useProjects';
 import { usePhotos, useDeletePhoto } from '@/hooks/usePhotos';
 import { useAuthStore } from '@/stores/authStore';
@@ -212,6 +213,7 @@ export default function ProjectDetailPage() {
       start_date:      project.start_date    ? String(project.start_date).substring(0, 10)    : '',
       completion_date: project.completion_date ? String(project.completion_date).substring(0, 10) : '',
       estimated_amount: project.estimated_amount ?? 0,
+      prospect_amount: project.prospect_amount ?? 0,
       contract_amount:  project.contract_amount ?? 0,
       notes:           project.notes ?? '',
       assigned_to:     project.assigned_to ?? '',
@@ -221,6 +223,7 @@ export default function ProjectDetailPage() {
   };
 
   const saveEdit = async () => {
+    if (!project) return;
     try {
       const updates = {
         ...editForm,
@@ -230,11 +233,21 @@ export default function ProjectDetailPage() {
         start_date:      editForm.start_date      ? String(editForm.start_date)      : undefined,
         completion_date: editForm.completion_date ? String(editForm.completion_date) : undefined,
         estimated_amount: Number(editForm.estimated_amount) || 0,
+        prospect_amount: Number(editForm.prospect_amount) || 0,
         contract_amount:  editForm.contract_amount !== '' && editForm.contract_amount != null
           ? Number(editForm.contract_amount)
           : undefined,
       };
-      await updateProject({ id: projectId, ...updates });
+      const inferred = statusInferredFromAmounts(
+        project.status,
+        editForm.estimated_amount,
+        editForm.contract_amount
+      );
+      await updateProject({
+        id: projectId,
+        ...updates,
+        ...(inferred ? { status: inferred } : {}),
+      });
       setEditingBasic(false);
       showToast('基本情報を更新しました');
     } catch (e) {
@@ -667,7 +680,12 @@ export default function ProjectDetailPage() {
               <h3 style={{ marginBottom: '0.75rem' }}>
                 <span className="material-icons text-green-600" style={{ fontSize: 16 }}>payments</span> 金額情報
               </h3>
-              <InfoRow label="見積もり金額">
+              <InfoRow label="見込み金額（概算）">
+                {editingBasic
+                  ? <input type="number" className="form-input w-full" value={editForm.prospect_amount ?? 0} onChange={(e) => setEditForm({ ...editForm, prospect_amount: Number(e.target.value) })} />
+                  : fmtMan(project.prospect_amount)}
+              </InfoRow>
+              <InfoRow label="見積金額（提示後）">
                 {editingBasic
                   ? <input type="number" className="form-input w-full" value={editForm.estimated_amount ?? 0} onChange={(e) => setEditForm({ ...editForm, estimated_amount: Number(e.target.value) })} />
                   : fmtMan(project.estimated_amount)}

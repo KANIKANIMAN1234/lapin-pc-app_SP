@@ -188,6 +188,7 @@ export type Database = {
           email: string | null;
           work_description: string;
           work_type: string[];
+          prospect_amount: number;
           estimated_amount: number;
           contract_amount: number | null;
           actual_cost: number | null;
@@ -230,6 +231,7 @@ export type Database = {
           email?: string | null;
           work_description?: string;
           work_type: string[];
+          prospect_amount?: number;
           estimated_amount?: number;
           contract_amount?: number | null;
           actual_cost?: number | null;
@@ -266,6 +268,7 @@ export type Database = {
           email?: string | null;
           work_description?: string;
           work_type?: string[];
+          prospect_amount?: number;
           estimated_amount?: number;
           contract_amount?: number | null;
           actual_cost?: number | null;

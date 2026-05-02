@@ -23,7 +23,7 @@ export function useProjects(filters?: ProjectFilters) {
         .select(`
           id, project_number, customer_name, customer_name_kana,
           address, phone, work_description, work_type,
-          status, estimated_amount, contract_amount,
+          status, prospect_amount, estimated_amount, contract_amount,
           acquisition_route, assigned_to,
           inquiry_date, contract_date, completion_date,
           gross_profit_rate, lat, lng,

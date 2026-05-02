@@ -7,6 +7,8 @@ interface LineNotifyPayload {
   address: string;
   workDescription?: string;
   workType: string[];
+  /** 登録時の概算（円）。未指定時は estimatedAmount を見込み表示に使う（後方互換） */
+  prospectAmount?: number;
   estimatedAmount: number;
   acquisitionRoute: string;
   inquiryDate: string;
@@ -60,12 +62,16 @@ async function fetchAdminLineUserIds(): Promise<string[]> {
   }
 }
 
+// ── 円 → 表示用（0 は「-」）─────────────────────────────────
+function fmtYenLine(n: number): string {
+  if (!n) return '-';
+  return n >= 10000 ? `${Math.floor(n / 10000)}万円` : `${n.toLocaleString()}円`;
+}
+
 // ── Flex Message（担当者向け・了解ボタン付き）────────────────
 function buildProjectFlex(data: LineNotifyPayload): object {
-  const amount =
-    data.estimatedAmount >= 10000
-      ? `${Math.floor(data.estimatedAmount / 10000)}万円`
-      : `${data.estimatedAmount.toLocaleString()}円`;
+  const prospectYen = data.prospectAmount ?? data.estimatedAmount;
+  const amount = fmtYenLine(prospectYen);
 
   const infoRow = (label: string, value: string) => ({
     type: 'box',
@@ -130,10 +136,8 @@ function buildProjectFlex(data: LineNotifyPayload): object {
 
 // ── テキストメッセージ（管理者向け）──────────────────────────
 function buildTextMessage(data: LineNotifyPayload): string {
-  const amount =
-    data.estimatedAmount >= 10000
-      ? `${Math.floor(data.estimatedAmount / 10000)}万円`
-      : `${data.estimatedAmount.toLocaleString()}円`;
+  const prospectYen = data.prospectAmount ?? data.estimatedAmount;
+  const amount = fmtYenLine(prospectYen);
 
   return (
     `📋【新規案件登録】\n━━━━━━━━━━━━━━\n` +

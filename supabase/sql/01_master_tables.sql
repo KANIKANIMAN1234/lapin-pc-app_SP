@@ -98,9 +98,8 @@ INSERT INTO m_settings (key, value, description) VALUES
   ('drive_folder_template',        '["01_見積書","02_契約書","03_施工写真/着工前","03_施工写真/施工中","03_施工写真/完工後","04_報告書","05_請求書","06_議事メモ","07_図面・資料"]', '新規案件Driveサブフォルダ（JSON・管理画面で編集）')
 ON CONFLICT (key) DO NOTHING;
 
--- m_bonus_periods 2026年度初期値
+-- m_bonus_periods 2026年度初期値（上半期・下半期の2期＝各6か月）
 INSERT INTO m_bonus_periods (year, period_number, period_label, period_start, period_end, months_label, fixed_cost, distribution_rate, target_amount) VALUES
-  (2026, 1, '2026年 第1期', '2026-01-01', '2026-04-30', '1月〜4月', 2000000, 10.00, 5000000),
-  (2026, 2, '2026年 第2期', '2026-05-01', '2026-08-31', '5月〜8月', 2000000, 10.00, 5000000),
-  (2026, 3, '2026年 第3期', '2026-09-01', '2026-12-31', '9月〜12月', 2000000, 10.00, 5000000)
+  (2026, 1, '2026年 第1期', '2026-01-01', '2026-06-30', '1月〜6月', 2000000, 10.00, 5000000),
+  (2026, 2, '2026年 第2期', '2026-07-01', '2026-12-31', '7月〜12月', 2000000, 10.00, 5000000)
 ON CONFLICT (year, period_number) DO NOTHING;

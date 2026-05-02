@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useCreateProject } from '@/hooks/useProjects';
 import { useAuthStore } from '@/stores/authStore';
 import { createClient } from '@/lib/supabase';
+import { statusInferredFromAmounts } from '@/lib/projectStatusFromAmounts';
 import type { ProjectStatus } from '@/types';
 
 const DEFAULT_WORK_TYPES = ['外壁塗装', '屋根塗装', '防水工事', '内装工事', 'リフォーム', 'その他'];
@@ -85,6 +86,7 @@ export default function NewProjectPage() {
     email: '',
     work_description: '',
     work_type: [] as string[],
+    prospect_amount: '',
     estimated_amount: '',
     acquisition_route: '',
     inquiry_date: new Date().toISOString().substring(0, 10),
@@ -136,6 +138,11 @@ export default function NewProjectPage() {
       const addressQuery = [form.postal_code, form.address].filter(Boolean).join(' ').trim();
       const coords = await geocodeAddress(addressQuery || form.address);
 
+      const prospect = Number(form.prospect_amount) || 0;
+      const est = Number(form.estimated_amount) || 0;
+      const resolvedStatus =
+        statusInferredFromAmounts(form.status, est, null) ?? form.status;
+
       const data = await createProject({
         customer_id: cust.id as string,
         customer_name: form.customer_name,
@@ -147,12 +154,13 @@ export default function NewProjectPage() {
         email: form.email || undefined,
         work_description: form.work_description,
         work_type: form.work_type,
-        estimated_amount: Number(form.estimated_amount) || 0,
+        prospect_amount: prospect,
+        estimated_amount: est,
         acquisition_route: form.acquisition_route,
         assigned_to: user.id,
         inquiry_date: form.inquiry_date,
         notes: form.notes || undefined,
-        status: form.status,
+        status: resolvedStatus,
         thankyou_flag: false,
         followup_flag: false,
         inspection_flag: false,
@@ -168,6 +176,7 @@ export default function NewProjectPage() {
           address: form.address,
           workDescription: form.work_description || undefined,
           workType: form.work_type,
+          prospectAmount: Number(form.prospect_amount) || 0,
           estimatedAmount: Number(form.estimated_amount) || 0,
           acquisitionRoute: form.acquisition_route,
           inquiryDate: form.inquiry_date,
@@ -309,15 +318,28 @@ export default function NewProjectPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="form-group">
-              <label>見積もり金額（円）</label>
+              <label>見込み金額（円）</label>
+              <input
+                type="number"
+                value={form.prospect_amount}
+                onChange={(e) => setForm((f) => ({ ...f, prospect_amount: e.target.value }))}
+                className="form-input"
+                placeholder="登録時のおおよその金額 例: 500000"
+                min={0}
+              />
+              <p className="text-xs text-gray-500 mt-1">問い合わせ時点の概算です（万単位表示は一覧と同じ基準：円で入力）</p>
+            </div>
+            <div className="form-group">
+              <label>見積金額（円）</label>
               <input
                 type="number"
                 value={form.estimated_amount}
                 onChange={(e) => setForm((f) => ({ ...f, estimated_amount: e.target.value }))}
                 className="form-input"
-                placeholder="例: 2500000"
+                placeholder="見積提示後に入力 未提示のままなら空欄"
                 min={0}
               />
+              <p className="text-xs text-gray-500 mt-1">正式な見積書を提示した金額。未入力のままでも登録できます</p>
             </div>
             <div className="form-group">
               <label>集客ルート</label>

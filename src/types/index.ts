@@ -37,6 +37,8 @@ export interface Project {
   email?: string;
   work_description: string;
   work_type: string[];
+  /** 見込み金額（登録時の概算）。見積提示後は estimated_amount */
+  prospect_amount?: number;
   estimated_amount: number;
   contract_amount?: number;
   acquisition_route: string;
@@ -185,9 +187,11 @@ export interface DashboardKPI {
   gross_profit_amount: number;
 }
 
+/** 月別推移（YYYY-MM）。amount=契約月ベースの契約金額、prospect_amount=問合せ月ベースの見込み合計 */
 export interface MonthlySalesData {
   month: string;
   amount: number;
+  prospect_amount: number;
 }
 
 export interface AcquisitionRouteData {

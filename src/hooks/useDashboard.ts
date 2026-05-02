@@ -27,7 +27,7 @@ export function useDashboard(startDate: string, endDate: string, userId?: string
       // 期間内のアクセス可能な案件を取得（RLSで自動フィルタ）
       let projectsQuery = supabase
         .from('t_projects')
-        .select('id, status, estimated_amount, contract_amount, gross_profit, gross_profit_rate, acquisition_route, work_type, inquiry_date, contract_date, assigned_to')
+        .select('id, status, prospect_amount, estimated_amount, contract_amount, gross_profit, gross_profit_rate, acquisition_route, work_type, inquiry_date, contract_date, assigned_to')
         .is('deleted_at', null)
         .gte('inquiry_date', startDate)
         .lte('inquiry_date', endDate);
@@ -40,7 +40,7 @@ export function useDashboard(startDate: string, endDate: string, userId?: string
       const pj = projects ?? [];
 
       const assigned_projects_count = pj.length;
-      const assigned_projects_amount = pj.reduce((s, p) => s + (p.estimated_amount || 0), 0);
+      const assigned_projects_amount = pj.reduce((s, p) => s + (Number(p.prospect_amount) || 0), 0);
 
       const estimates = pj.filter((p) => p.status === 'estimate' || p.status === 'contract' || p.status === 'in_progress' || p.status === 'completed');
       const sent_estimates_count = estimates.length;
@@ -56,16 +56,27 @@ export function useDashboard(startDate: string, endDate: string, userId?: string
       const gross_profit_amount = withGrossProfit.reduce((s, p) => s + (p.gross_profit || 0), 0);
       const gross_profit_rate = contract_amount > 0 ? Math.round((gross_profit_amount / contract_amount) * 100 * 10) / 10 : 0;
 
-      // 月別売上
-      const monthlyMap: Record<string, number> = {};
+      // 月別推移（契約金額＝契約日の月、見込み＝問合せ日の月）
+      const contractByMonth: Record<string, number> = {};
       contracts.forEach((p) => {
         if (!p.contract_date) return;
         const month = p.contract_date.substring(0, 7);
-        monthlyMap[month] = (monthlyMap[month] || 0) + (p.contract_amount || 0);
+        contractByMonth[month] = (contractByMonth[month] || 0) + (p.contract_amount || 0);
       });
-      const monthly_sales: MonthlySalesData[] = Object.entries(monthlyMap)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([month, amount]) => ({ month, amount }));
+      const prospectByMonth: Record<string, number> = {};
+      pj.forEach((p) => {
+        if (!p.inquiry_date) return;
+        const month = String(p.inquiry_date).substring(0, 7);
+        prospectByMonth[month] = (prospectByMonth[month] || 0) + (Number(p.prospect_amount) || 0);
+      });
+      const allMonths = [...new Set([...Object.keys(contractByMonth), ...Object.keys(prospectByMonth)])].sort(
+        (a, b) => a.localeCompare(b)
+      );
+      const monthly_sales: MonthlySalesData[] = allMonths.map((month) => ({
+        month,
+        amount: contractByMonth[month] || 0,
+        prospect_amount: prospectByMonth[month] || 0,
+      }));
 
       // 集客ルート別
       const routeMap: Record<string, { count: number; amount: number }> = {};

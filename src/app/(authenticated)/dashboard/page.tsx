@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useDashboard } from '@/hooks/useDashboard';
 import NoticesTab from '@/components/notices/NoticesTab';
-import { Bar, Line } from 'react-chartjs-2';
+import { Bar, Chart } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -30,7 +30,14 @@ function formatYen(v: number) {
 type SalesPeriodMode = 'month' | 'quarter' | 'year';
 type DashboardTab = 'management' | 'calendar' | 'notices';
 
-const TABS: { key: DashboardTab; label: string; icon: string }[] = [
+/** 暦の YYYY-MM から年度Q（4月始まり）インデックス 0..3 */
+function fiscalQuarterIndex(ym: string): number {
+  const monthNum = parseInt(ym.slice(5, 7), 10);
+  if (monthNum >= 4 && monthNum <= 6) return 0;
+  if (monthNum >= 7 && monthNum <= 9) return 1;
+  if (monthNum >= 10) return 2;
+  return 3;
+}
   { key: 'management', label: '管理業務', icon: 'dashboard' },
   { key: 'calendar', label: 'カレンダー', icon: 'calendar_today' },
   { key: 'notices', label: '連絡事項', icon: 'campaign' },
@@ -133,53 +140,81 @@ function ManagementTab() {
   ];
 
   const monthlySales = data.charts?.monthly_sales ?? [];
-  const getSalesChartData = () => {
+  const salesCombo = useMemo(() => {
     if (salesMode === 'year') {
+      const tc = monthlySales.reduce((s, m) => s + m.amount, 0);
+      const tp = monthlySales.reduce((s, m) => s + m.prospect_amount, 0);
       return {
-        type: 'bar' as const,
         labels: ['前々年度', '前年度', '今年度'],
-        data: [0, 0, monthlySales.reduce((s, m) => s + m.amount, 0)],
+        contractData: [0, 0, tc],
+        prospectData: [0, 0, tp],
       };
     }
     if (salesMode === 'quarter') {
       const qLabels = ['Q1 (4-6月)', 'Q2 (7-9月)', 'Q3 (10-12月)', 'Q4 (1-3月)'];
-      const qData = [0, 0, 0, 0];
-      monthlySales.forEach((m, i) => { qData[Math.floor(i / 3)] += m.amount; });
-      return { type: 'bar' as const, labels: qLabels, data: qData };
+      const qContract = [0, 0, 0, 0];
+      const qProspect = [0, 0, 0, 0];
+      monthlySales.forEach((m) => {
+        const qi = fiscalQuarterIndex(m.month);
+        qContract[qi] += m.amount;
+        qProspect[qi] += m.prospect_amount;
+      });
+      return { labels: qLabels, contractData: qContract, prospectData: qProspect };
     }
     return {
-      type: 'line' as const,
       labels: monthlySales.map((m) => m.month),
-      data: monthlySales.map((m) => m.amount),
+      contractData: monthlySales.map((m) => m.amount),
+      prospectData: monthlySales.map((m) => m.prospect_amount),
     };
-  };
-  const salesChart = getSalesChartData();
-  const isSalesBar = salesChart.type === 'bar';
+  }, [monthlySales, salesMode]);
 
-  const salesChartConfig = {
-    labels: salesChart.labels,
-    datasets: [{
-      label: '売上',
-      data: salesChart.data,
-      borderColor: '#06C755',
-      backgroundColor: isSalesBar ? 'rgba(6, 199, 85, 0.6)' : 'rgba(6, 199, 85, 0.1)',
-      tension: 0.4,
-      fill: !isSalesBar,
-      pointBackgroundColor: '#06C755',
-      borderRadius: isSalesBar ? 6 : 0,
-    }],
+  const salesComboChartConfig = {
+    labels: salesCombo.labels,
+    datasets: [
+      {
+        type: 'bar' as const,
+        label: '契約売上',
+        data: salesCombo.contractData,
+        backgroundColor: 'rgba(6, 199, 85, 0.55)',
+        borderColor: '#059669',
+        borderWidth: 1,
+        borderRadius: 6,
+        order: 1,
+      },
+      {
+        type: 'line' as const,
+        label: '見込み（問合せ月）',
+        data: salesCombo.prospectData,
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59, 130, 246, 0.12)',
+        tension: 0.35,
+        fill: false,
+        pointBackgroundColor: '#2563eb',
+        pointRadius: 4,
+        pointHoverRadius: 5,
+        borderWidth: 2,
+        order: 2,
+      },
+    ],
   };
 
-  const salesChartOptions = {
+  const salesComboChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    interaction: { mode: 'index' as const, intersect: false },
     plugins: {
-      legend: { display: false },
+      legend: {
+        display: true,
+        position: 'bottom' as const,
+        labels: { boxWidth: 12, padding: 16, font: { size: 11 } },
+      },
       tooltip: {
         callbacks: {
-          label: (ctx: { parsed: { y: number | null } }) => {
-            if (ctx.parsed.y == null) return 'データなし';
-            return '売上: ' + ctx.parsed.y.toLocaleString() + '円';
+          label: (ctx: { dataset: { label?: string }; parsed: { y: number | null } }) => {
+            const y = ctx.parsed.y;
+            if (y == null) return '';
+            const label = ctx.dataset.label || '';
+            return `${label}: ${Number(y).toLocaleString()}円`;
           },
         },
       },
@@ -358,12 +393,8 @@ function ManagementTab() {
               ))}
             </div>
           </div>
-          <div style={{ height: 210 }}>
-            {isSalesBar ? (
-              <Bar data={salesChartConfig} options={salesChartOptions as never} />
-            ) : (
-              <Line data={salesChartConfig} options={salesChartOptions as never} />
-            )}
+          <div style={{ height: 240 }}>
+            <Chart type="bar" data={salesComboChartConfig as never} options={salesComboChartOptions as never} />
           </div>
         </div>
 
