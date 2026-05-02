@@ -292,19 +292,19 @@ export default function ProjectsPage() {
                   </th>
                   <th
                     onClick={() => handleSort('prospect_amount')}
-                    className="cursor-pointer select-none text-right"
+                    className="cursor-pointer select-none"
                   >
                     見込み金額 {sortKey === 'prospect_amount' ? (sortAsc ? '↑' : '↓') : ''}
                   </th>
                   <th
                     onClick={() => handleSort('estimated_amount')}
-                    className="cursor-pointer select-none text-right"
+                    className="cursor-pointer select-none"
                   >
                     見積金額 {sortKey === 'estimated_amount' ? (sortAsc ? '↑' : '↓') : ''}
                   </th>
                   <th
                     onClick={() => handleSort('contract_amount')}
-                    className="cursor-pointer select-none text-right"
+                    className="cursor-pointer select-none"
                   >
                     契約金額 {sortKey === 'contract_amount' ? (sortAsc ? '↑' : '↓') : ''}
                   </th>
@@ -404,13 +404,13 @@ export default function ProjectsPage() {
                         </select>
                       )}
                     </td>
-                    <td className="text-right font-medium">
+                    <td className="font-medium tabular-nums">
                       {fmtMan(project.prospect_amount)}
                     </td>
-                    <td className="text-right font-medium">
+                    <td className="font-medium tabular-nums">
                       {fmtMan(project.estimated_amount)}
                     </td>
-                    <td className="text-right font-medium">
+                    <td className="font-medium tabular-nums">
                       {fmtMan(project.contract_amount)}
                     </td>
                     <td className="text-gray-500 text-xs">
