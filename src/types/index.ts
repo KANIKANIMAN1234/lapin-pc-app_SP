@@ -187,11 +187,17 @@ export interface DashboardKPI {
   gross_profit_amount: number;
 }
 
-/** 月別推移（YYYY-MM）。amount=契約月ベースの契約金額、prospect_amount=問合せ月ベースの見込み合計 */
-export interface MonthlySalesData {
+/** 業績推移チャート用。月キー YYYY-MM ごとの4指標 */
+export interface PerformanceTrendPoint {
   month: string;
-  amount: number;
-  prospect_amount: number;
+  /** 見積提示相当: estimated_amount 合計（estimate_date 優先、なければ inquiry の月） */
+  estimate_presented: number;
+  /** 契約ベース: contract_date の月 × 契約金額 */
+  contract_amount: number;
+  /** 完工ベース: ステータス完了、completion_date（なければ contract_date）の月 × 契約金額 */
+  completed_amount: number;
+  /** 利益: 完了案件の粗利（gross_profit）を同上の月で集計 */
+  profit_amount: number;
 }
 
 export interface AcquisitionRouteData {

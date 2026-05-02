@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase';
-import type { DashboardKPI, MonthlySalesData, AcquisitionRouteData, WorkTypeData, BonusProgress } from '@/types';
+import type { DashboardKPI, PerformanceTrendPoint, AcquisitionRouteData, WorkTypeData, BonusProgress } from '@/types';
 
 export interface DashboardData {
   user_id: string;
@@ -9,7 +9,7 @@ export interface DashboardData {
   kpi: DashboardKPI;
   bonus_progress: BonusProgress | null;
   charts: {
-    monthly_sales: MonthlySalesData[];
+    performance_trend: PerformanceTrendPoint[];
     acquisition_route: AcquisitionRouteData[];
     work_type: WorkTypeData[];
   };
@@ -27,7 +27,9 @@ export function useDashboard(startDate: string, endDate: string, userId?: string
       // 期間内のアクセス可能な案件を取得（RLSで自動フィルタ）
       let projectsQuery = supabase
         .from('t_projects')
-        .select('id, status, prospect_amount, estimated_amount, contract_amount, gross_profit, gross_profit_rate, acquisition_route, work_type, inquiry_date, contract_date, assigned_to')
+        .select(
+          'id, status, prospect_amount, estimated_amount, contract_amount, gross_profit, gross_profit_rate, acquisition_route, work_type, inquiry_date, estimate_date, contract_date, completion_date, assigned_to'
+        )
         .is('deleted_at', null)
         .gte('inquiry_date', startDate)
         .lte('inquiry_date', endDate);
@@ -56,26 +58,53 @@ export function useDashboard(startDate: string, endDate: string, userId?: string
       const gross_profit_amount = withGrossProfit.reduce((s, p) => s + (p.gross_profit || 0), 0);
       const gross_profit_rate = contract_amount > 0 ? Math.round((gross_profit_amount / contract_amount) * 100 * 10) / 10 : 0;
 
-      // 月別推移（契約金額＝契約日の月、見込み＝問合せ日の月）
-      const contractByMonth: Record<string, number> = {};
+      // 業績推移（4系列・月次キーに正規化後ダッシュボードで四半期/年へ集約）
+      const estimatePresentedByMonth: Record<string, number> = {};
+      const contractAmtByMonth: Record<string, number> = {};
+      const completedAmtByMonth: Record<string, number> = {};
+      const profitByMonth: Record<string, number> = {};
+
+      pj.forEach((p) => {
+        const est = Number(p.estimated_amount) || 0;
+        if (est > 0) {
+          const d = p.estimate_date || p.inquiry_date;
+          if (d) {
+            const month = String(d).substring(0, 7);
+            estimatePresentedByMonth[month] = (estimatePresentedByMonth[month] || 0) + est;
+          }
+        }
+      });
+
       contracts.forEach((p) => {
         if (!p.contract_date) return;
         const month = p.contract_date.substring(0, 7);
-        contractByMonth[month] = (contractByMonth[month] || 0) + (p.contract_amount || 0);
+        contractAmtByMonth[month] = (contractAmtByMonth[month] || 0) + (Number(p.contract_amount) || 0);
       });
-      const prospectByMonth: Record<string, number> = {};
+
       pj.forEach((p) => {
-        if (!p.inquiry_date) return;
-        const month = String(p.inquiry_date).substring(0, 7);
-        prospectByMonth[month] = (prospectByMonth[month] || 0) + (Number(p.prospect_amount) || 0);
+        if (p.status !== 'completed') return;
+        const d = p.completion_date || p.contract_date;
+        if (!d) return;
+        const month = String(d).substring(0, 7);
+        completedAmtByMonth[month] = (completedAmtByMonth[month] || 0) + (Number(p.contract_amount) || 0);
+        profitByMonth[month] = (profitByMonth[month] || 0) + (Number(p.gross_profit) || 0);
       });
-      const allMonths = [...new Set([...Object.keys(contractByMonth), ...Object.keys(prospectByMonth)])].sort(
-        (a, b) => a.localeCompare(b)
-      );
-      const monthly_sales: MonthlySalesData[] = allMonths.map((month) => ({
+
+      const trendMonthKeys = [
+        ...new Set([
+          ...Object.keys(estimatePresentedByMonth),
+          ...Object.keys(contractAmtByMonth),
+          ...Object.keys(completedAmtByMonth),
+          ...Object.keys(profitByMonth),
+        ]),
+      ].sort((a, b) => a.localeCompare(b));
+
+      const performance_trend: PerformanceTrendPoint[] = trendMonthKeys.map((month) => ({
         month,
-        amount: contractByMonth[month] || 0,
-        prospect_amount: prospectByMonth[month] || 0,
+        estimate_presented: estimatePresentedByMonth[month] || 0,
+        contract_amount: contractAmtByMonth[month] || 0,
+        completed_amount: completedAmtByMonth[month] || 0,
+        profit_amount: profitByMonth[month] || 0,
       }));
 
       // 集客ルート別
@@ -178,7 +207,7 @@ export function useDashboard(startDate: string, endDate: string, userId?: string
           gross_profit_amount,
         },
         bonus_progress,
-        charts: { monthly_sales, acquisition_route, work_type },
+        charts: { performance_trend, acquisition_route, work_type },
       };
     },
     enabled: !!startDate && !!endDate,

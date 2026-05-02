@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase';
-import type { Project } from '@/types';
+import { statusInferredFromAmounts } from '@/lib/projectStatusFromAmounts';
+import type { Project, ProjectStatus } from '@/types';
 
 type ProjectFilters = {
   status?: string[];
@@ -113,9 +114,34 @@ export function useUpdateProject() {
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<Project> & { id: string }) => {
       const supabase = createClient();
+      let payload: Partial<Project> = { ...updates };
+
+      if (!Object.prototype.hasOwnProperty.call(updates, 'status')) {
+        const { data: row } = await supabase
+          .from('t_projects')
+          .select('status, estimated_amount, contract_amount')
+          .eq('id', id)
+          .is('deleted_at', null)
+          .single();
+        if (row) {
+          const est =
+            updates.estimated_amount !== undefined ? updates.estimated_amount : row.estimated_amount ?? 0;
+          const con =
+            updates.contract_amount !== undefined ? updates.contract_amount : row.contract_amount ?? 0;
+          const inferred = statusInferredFromAmounts(
+            row.status as ProjectStatus,
+            est,
+            con
+          );
+          if (inferred) {
+            payload = { ...payload, status: inferred };
+          }
+        }
+      }
+
       const { data, error } = await supabase
         .from('t_projects')
-        .update(updates)
+        .update(payload)
         .eq('id', id)
         .select()
         .single();

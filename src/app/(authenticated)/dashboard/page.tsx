@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useDashboard } from '@/hooks/useDashboard';
 import NoticesTab from '@/components/notices/NoticesTab';
-import { Bar, Chart } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -38,6 +38,8 @@ function fiscalQuarterIndex(ym: string): number {
   if (monthNum >= 10) return 2;
   return 3;
 }
+
+const TABS: { key: DashboardTab; label: string; icon: string }[] = [
   { key: 'management', label: '管理業務', icon: 'dashboard' },
   { key: 'calendar', label: 'カレンダー', icon: 'calendar_today' },
   { key: 'notices', label: '連絡事項', icon: 'campaign' },
@@ -139,66 +141,88 @@ function ManagementTab() {
     { title: '粗利率', value: String(kpi.gross_profit_rate), unit: '%' },
   ];
 
-  const monthlySales = data.charts?.monthly_sales ?? [];
-  const salesCombo = useMemo(() => {
+  const performanceTrend = data.charts?.performance_trend ?? [];
+  const performanceBarChart = useMemo(() => {
     if (salesMode === 'year') {
-      const tc = monthlySales.reduce((s, m) => s + m.amount, 0);
-      const tp = monthlySales.reduce((s, m) => s + m.prospect_amount, 0);
+      const sumEst = performanceTrend.reduce((s, r) => s + r.estimate_presented, 0);
+      const sumCon = performanceTrend.reduce((s, r) => s + r.contract_amount, 0);
+      const sumComp = performanceTrend.reduce((s, r) => s + r.completed_amount, 0);
+      const sumProfit = performanceTrend.reduce((s, r) => s + r.profit_amount, 0);
       return {
         labels: ['前々年度', '前年度', '今年度'],
-        contractData: [0, 0, tc],
-        prospectData: [0, 0, tp],
+        estimate_presented: [0, 0, sumEst],
+        contract_amount: [0, 0, sumCon],
+        completed_amount: [0, 0, sumComp],
+        profit_amount: [0, 0, sumProfit],
       };
     }
     if (salesMode === 'quarter') {
       const qLabels = ['Q1 (4-6月)', 'Q2 (7-9月)', 'Q3 (10-12月)', 'Q4 (1-3月)'];
-      const qContract = [0, 0, 0, 0];
-      const qProspect = [0, 0, 0, 0];
-      monthlySales.forEach((m) => {
-        const qi = fiscalQuarterIndex(m.month);
-        qContract[qi] += m.amount;
-        qProspect[qi] += m.prospect_amount;
+      const estimate_presented = [0, 0, 0, 0];
+      const contract_amount = [0, 0, 0, 0];
+      const completed_amount = [0, 0, 0, 0];
+      const profit_amount = [0, 0, 0, 0];
+      performanceTrend.forEach((r) => {
+        const qi = fiscalQuarterIndex(r.month);
+        estimate_presented[qi] += r.estimate_presented;
+        contract_amount[qi] += r.contract_amount;
+        completed_amount[qi] += r.completed_amount;
+        profit_amount[qi] += r.profit_amount;
       });
-      return { labels: qLabels, contractData: qContract, prospectData: qProspect };
+      return { labels: qLabels, estimate_presented, contract_amount, completed_amount, profit_amount };
     }
     return {
-      labels: monthlySales.map((m) => m.month),
-      contractData: monthlySales.map((m) => m.amount),
-      prospectData: monthlySales.map((m) => m.prospect_amount),
+      labels: performanceTrend.map((r) => r.month),
+      estimate_presented: performanceTrend.map((r) => r.estimate_presented),
+      contract_amount: performanceTrend.map((r) => r.contract_amount),
+      completed_amount: performanceTrend.map((r) => r.completed_amount),
+      profit_amount: performanceTrend.map((r) => r.profit_amount),
     };
-  }, [monthlySales, salesMode]);
+  }, [performanceTrend, salesMode]);
 
-  const salesComboChartConfig = {
-    labels: salesCombo.labels,
+  const performanceBarChartConfig = {
+    labels: performanceBarChart.labels,
     datasets: [
       {
-        type: 'bar' as const,
-        label: '契約売上',
-        data: salesCombo.contractData,
-        backgroundColor: 'rgba(6, 199, 85, 0.55)',
-        borderColor: '#059669',
+        label: '見積提示金額',
+        data: performanceBarChart.estimate_presented,
+        backgroundColor: 'rgba(59, 130, 246, 0.75)',
+        borderColor: '#2563eb',
         borderWidth: 1,
-        borderRadius: 6,
-        order: 1,
+        borderRadius: 4,
+        maxBarThickness: 18,
       },
       {
-        type: 'line' as const,
-        label: '見込み（問合せ月）',
-        data: salesCombo.prospectData,
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59, 130, 246, 0.12)',
-        tension: 0.35,
-        fill: false,
-        pointBackgroundColor: '#2563eb',
-        pointRadius: 4,
-        pointHoverRadius: 5,
-        borderWidth: 2,
-        order: 2,
+        label: '契約金額',
+        data: performanceBarChart.contract_amount,
+        backgroundColor: 'rgba(6, 199, 85, 0.75)',
+        borderColor: '#059669',
+        borderWidth: 1,
+        borderRadius: 4,
+        maxBarThickness: 18,
+      },
+      {
+        label: '完了金額',
+        data: performanceBarChart.completed_amount,
+        backgroundColor: 'rgba(245, 158, 11, 0.85)',
+        borderColor: '#d97706',
+        borderWidth: 1,
+        borderRadius: 4,
+        maxBarThickness: 18,
+      },
+      {
+        label: '利益金額',
+        data: performanceBarChart.profit_amount,
+        backgroundColor: 'rgba(239, 68, 68, 0.75)',
+        borderColor: '#dc2626',
+        borderWidth: 1,
+        borderRadius: 4,
+        maxBarThickness: 18,
       },
     ],
   };
 
-  const salesComboChartOptions = {
+  const performanceBarChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     interaction: { mode: 'index' as const, intersect: false },
@@ -206,7 +230,7 @@ function ManagementTab() {
       legend: {
         display: true,
         position: 'bottom' as const,
-        labels: { boxWidth: 12, padding: 16, font: { size: 11 } },
+        labels: { boxWidth: 12, padding: 12, font: { size: 10 } },
       },
       tooltip: {
         callbacks: {
@@ -220,6 +244,10 @@ function ManagementTab() {
       },
     },
     scales: {
+      x: {
+        stacked: false,
+        ticks: { maxRotation: 45, minRotation: 0, font: { size: 10 } },
+      },
       y: {
         beginAtZero: true,
         ticks: { callback: (v: number | string) => (Number(v) / 10000).toLocaleString() + '万円' },
@@ -380,7 +408,7 @@ function ManagementTab() {
       <div className="charts-grid">
         <div className="chart-card chart-card-wide">
           <div className="chart-header">
-            <h3 className="font-bold">月別売上推移</h3>
+            <h3 className="font-bold">業績推移</h3>
             <div className="chart-period-tabs">
               {([['month', '月'], ['quarter', '四半期'], ['year', '年']] as const).map(([mode, label]) => (
                 <button
@@ -393,8 +421,8 @@ function ManagementTab() {
               ))}
             </div>
           </div>
-          <div style={{ height: 240 }}>
-            <Chart type="bar" data={salesComboChartConfig as never} options={salesComboChartOptions as never} />
+          <div style={{ height: 280 }}>
+            <Bar data={performanceBarChartConfig as never} options={performanceBarChartOptions as never} />
           </div>
         </div>
 
