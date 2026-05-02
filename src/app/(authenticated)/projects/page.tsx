@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useProjects, useUpdateProject } from '@/hooks/useProjects';
 import { useAuthStore } from '@/stores/authStore';
 import { createClient } from '@/lib/supabase';
@@ -45,6 +46,7 @@ const STATUS_BG: Record<string, string> = {
 };
 
 export default function ProjectsPage() {
+  const router = useRouter();
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'admin';
   const isSales = user?.role === 'sales';
@@ -312,12 +314,24 @@ export default function ProjectsPage() {
                   >
                     問い合わせ日 {sortKey === 'inquiry_date' ? (sortAsc ? '↑' : '↓') : ''}
                   </th>
-                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {sorted.map((project: Project) => (
-                  <tr key={project.id}>
+                  <tr
+                    key={project.id}
+                    tabIndex={0}
+                    role="link"
+                    aria-label={`${project.customer_name} の詳細を開く`}
+                    className="cursor-pointer hover:bg-green-50/60 transition-colors"
+                    onClick={() => router.push(`/projects/${project.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        router.push(`/projects/${project.id}`);
+                      }
+                    }}
+                  >
                     <td className="font-mono text-xs">{project.project_number}</td>
                     <td className="font-medium">{project.customer_name}</td>
                     <td className="text-gray-500 text-xs">
@@ -326,6 +340,8 @@ export default function ProjectsPage() {
                           href={`/map?focus=${project.id}`}
                           className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline group"
                           title="顧客マップで表示"
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
                         >
                           <span className="material-icons text-[13px] text-blue-400 group-hover:text-blue-600">location_on</span>
                           {project.address}
@@ -380,6 +396,7 @@ export default function ProjectsPage() {
                             outline: 'none',
                           }}
                           onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => e.stopPropagation()}
                         >
                           {statusList.map(({ value, label }) => (
                             <option key={value} value={value}>{label}</option>
@@ -398,14 +415,6 @@ export default function ProjectsPage() {
                     </td>
                     <td className="text-gray-500 text-xs">
                       {project.inquiry_date}
-                    </td>
-                    <td>
-                      <Link
-                        href={`/projects/${project.id}`}
-                        className="text-xs text-green-600 hover:underline whitespace-nowrap"
-                      >
-                        詳細 →
-                      </Link>
                     </td>
                   </tr>
                 ))}
