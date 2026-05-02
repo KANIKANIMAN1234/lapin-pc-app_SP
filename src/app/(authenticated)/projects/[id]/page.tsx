@@ -333,7 +333,7 @@ export default function ProjectDetailPage() {
       if (error) throw error;
       return data ?? [];
     },
-    enabled: activeTab === 'budget',
+    enabled: !!projectId,
   });
 
   const { data: projectExpenses = [] } = useQuery({
@@ -359,7 +359,7 @@ export default function ProjectDetailPage() {
         m_users: { name: string } | null;
       }[];
     },
-    enabled: activeTab === 'budget',
+    enabled: !!projectId,
   });
 
   const createBudget = useMutation({
@@ -387,6 +387,11 @@ export default function ProjectDetailPage() {
 
   const totalPlanned = budgets.reduce((s, b) => s + Number(b.planned_amount ?? 0), 0);
   const totalActualBudgets = budgets.reduce((s, b) => s + Number(b.actual_amount ?? 0), 0);
+  const expenseSumForActual = projectExpenses
+    .filter((e) => e.status === 'pending' || e.status === 'approved')
+    .reduce((s, e) => s + Number(e.amount ?? 0), 0);
+  /** 予算の実績合計＋経費（DBトリガと同じ定義。画面上の実際原価合計の主表示） */
+  const totalActualDisplayed = totalActualBudgets + expenseSumForActual;
 
   // ── 日報 ──
   const { data: reports = [] } = useQuery({
@@ -422,9 +427,8 @@ export default function ProjectDetailPage() {
   }
 
   const contractAmount = Number(project.contract_amount ?? 0);
-  const totalActualProject = Number(project.actual_cost ?? 0);
   const grossFromActual =
-    contractAmount > 0 ? contractAmount - totalActualProject : null;
+    contractAmount > 0 ? contractAmount - totalActualDisplayed : null;
   const grossProfit = Number(project.gross_profit ?? 0);
   const grossProfitRate = Number(project.gross_profit_rate ?? 0);
   const filteredPhotos = photos?.filter((p) => p.type === selectedPhotoType) ?? [];
@@ -662,8 +666,8 @@ export default function ProjectDetailPage() {
                   : fmt(project.contract_amount)}
               </InfoRow>
               <InfoRow label="実行原価">
-                <span className="font-medium">{fmt(project.actual_cost)}</span>
-                <span className="text-xs text-gray-400 ml-1">（原価タブ自動集計）</span>
+                <span className="font-medium">{fmt(totalActualDisplayed)}</span>
+                <span className="text-xs text-gray-400 ml-1">（予算実績＋登録経費）</span>
               </InfoRow>
               <InfoRow label="粗利益">
                 <span className={`font-medium ${grossProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -790,8 +794,8 @@ export default function ProjectDetailPage() {
             <SummaryCard label="計画原価合計" value={fmt(totalPlanned)} />
             <SummaryCard
               label="実際原価合計"
-              value={fmt(totalActualProject)}
-              color={totalActualProject > contractAmount && contractAmount > 0 ? 'red' : undefined}
+              value={fmt(totalActualDisplayed)}
+              color={totalActualDisplayed > contractAmount && contractAmount > 0 ? 'red' : undefined}
             />
             <SummaryCard
               label="粗利（見込）"
