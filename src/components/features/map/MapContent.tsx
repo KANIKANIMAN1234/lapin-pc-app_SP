@@ -5,6 +5,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { createClient } from '@/lib/supabase';
+import { geocodeJapaneseAddress } from '@/lib/nominatimGeocode';
 
 // Leaflet デフォルトアイコンのパス修正
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
@@ -149,20 +150,6 @@ function MapCenterUpdater({ center, zoom }: { center: [number, number]; zoom?: n
   return null;
 }
 
-async function geocodeAddress(address: string): Promise<[number, number] | null> {
-  try {
-    const resp = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
-      { headers: { 'User-Agent': 'lapin-reform-app/1.0' } }
-    );
-    const results = await resp.json();
-    if (results.length > 0) return [Number(results[0].lat), Number(results[0].lon)];
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 interface MapContentProps {
   selectedCustomer: MapCustomer | null;
   onSelectCustomer: (customer: MapCustomer | null) => void;
@@ -252,7 +239,7 @@ function MapContent({
 
       for (const p of toGeocode) {
         await new Promise((r) => setTimeout(r, 1100));
-        const coords = await geocodeAddress(p.address as string);
+        const coords = await geocodeJapaneseAddress(p.address as string);
         remaining -= 1;
         onGeocodingProgress?.(remaining);
 

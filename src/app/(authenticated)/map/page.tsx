@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useAuthStore } from '@/stores/authStore';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
+import { geocodeJapaneseAddress } from '@/lib/nominatimGeocode';
 
 const MapContent = dynamic(() => import('@/components/features/map/MapContent'), { ssr: false });
 
@@ -51,23 +52,6 @@ function saveSettings(userId: string, patch: Partial<MapSettings>) {
   }
 }
 
-// ─── geocoding ────────────────────────────────────────────────────
-async function geocodeAddress(address: string): Promise<[number, number] | null> {
-  try {
-    const resp = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`
-    );
-    const results = await resp.json();
-    if (results.length > 0) {
-      return [Number(results[0].lat), Number(results[0].lon)];
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-// ─── 本体（useSearchParams を使うため Suspense で囲む） ─────────────
 function MapPageInner() {
   const { user } = useAuthStore();
   const searchParams = useSearchParams();
@@ -193,7 +177,7 @@ function MapPageInner() {
 
     if (areaType === 'custom' && customAddress.trim()) {
       setGeocoding(true);
-      const coords = await geocodeAddress(customAddress);
+      const coords = await geocodeJapaneseAddress(customAddress);
       setGeocoding(false);
       if (coords) {
         [lat, lng] = coords;
@@ -216,7 +200,7 @@ function MapPageInner() {
       const addr = data?.value ?? '';
       if (addr) {
         setGeocoding(true);
-        const coords = await geocodeAddress(addr);
+        const coords = await geocodeJapaneseAddress(addr);
         setGeocoding(false);
         if (coords) [lat, lng] = coords;
         areaAddress = addr;
