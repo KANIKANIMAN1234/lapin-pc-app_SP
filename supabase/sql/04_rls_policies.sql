@@ -83,20 +83,35 @@ CREATE POLICY "t_projects_insert" ON t_projects
     )
   );
 
--- 更新: admin・staff=全件, sales=自分担当のみ
+-- 更新・論理削除を1ポリシーに統合（重複 UPDATE ポリシーによる 403 を防ぐ）
+-- admin/staff=全件の未削除行を更新可・論理削除可 / sales=自分担当の未削除行のみ更新可（論理削除不可）
 CREATE POLICY "t_projects_update" ON t_projects
   FOR UPDATE USING (
-    get_current_user_role() IN ('admin', 'staff')
+    deleted_at IS NULL
+    AND (
+      get_current_user_role() IN ('admin', 'staff')
+      OR (
+        get_current_user_role() = 'sales'
+        AND assigned_to = auth.uid()::UUID
+      )
+    )
+  )
+  WITH CHECK (
+    (
+      deleted_at IS NULL
+      AND (
+        get_current_user_role() IN ('admin', 'staff')
+        OR (
+          get_current_user_role() = 'sales'
+          AND assigned_to = auth.uid()::UUID
+        )
+      )
+    )
     OR (
-      get_current_user_role() = 'sales'
-      AND assigned_to = auth.uid()::UUID
+      deleted_at IS NOT NULL
+      AND get_current_user_role() IN ('admin', 'staff')
     )
   );
-
--- 論理削除（deleted_at への UPDATE）: admin・staff のみ
-CREATE POLICY "t_projects_soft_delete" ON t_projects
-  FOR UPDATE USING (get_current_user_role() IN ('admin', 'staff'))
-  WITH CHECK (deleted_at IS NOT NULL);
 
 
 -- ==============================================================
