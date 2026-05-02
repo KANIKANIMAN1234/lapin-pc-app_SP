@@ -1,10 +1,12 @@
--- 日報に添付写真の公開URL配列を保存し、Storage バケット report-photos でホストする。
--- 実行後: スマホ日報の写真が PC 案件詳細の日報モーダルに表示される。
+-- 日報に添付写真の公開URL配列を保存する列（主に Google Drive 直リンク。
+--   形式: https://drive.google.com/uc?export=view&id=... ）
+-- レガシー: 以前は Supabase Storage report-photos の URL が入る場合あり。
+-- Storage バケット report-photos は任意（スマホ日報は案件 Drive の「日報」フォルダを使用）。
 
 ALTER TABLE t_reports
   ADD COLUMN IF NOT EXISTS photo_urls JSONB DEFAULT '[]'::jsonb;
 
-COMMENT ON COLUMN t_reports.photo_urls IS '添付画像の公開URL配列（Supabase Storage report-photos）';
+COMMENT ON COLUMN t_reports.photo_urls IS '添付画像の公開URL配列（Google Drive 表示用URL。Storage のレガシーURL可）';
 
 -- ── Storage: report-photos（認証ユーザは自分の uid 配下のみアップロード）──
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
