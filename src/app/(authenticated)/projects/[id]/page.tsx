@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase';
@@ -8,8 +8,9 @@ import { statusInferredFromAmounts } from '@/lib/projectStatusFromAmounts';
 import { useProject, useUpdateProject } from '@/hooks/useProjects';
 import { usePhotos, useDeletePhoto } from '@/hooks/usePhotos';
 import { useAuthStore } from '@/stores/authStore';
-import type { Photo, ProjectStatus } from '@/types';
+import type { ProjectStatus } from '@/types';
 import { EstimateRegisterButton } from '@/components/projects/EstimateRegisterButton';
+import { fetchPhotoPhaseOptions, photoMatchesPhase, canonicalPhotoPhase } from '@/lib/photoPhaseOptions';
 
 // ─── 定数 ───────────────────────────────────────────────────────
 const DEFAULT_STATUS_LIST: { value: ProjectStatus; label: string }[] = [
@@ -30,13 +31,6 @@ const STATUS_CSS: Record<string, string> = {
   in_progress:    'status-in_progress',
   completed:      'status-completed',
   lost:           'status-lost',
-};
-
-const PHOTO_TYPE_LABELS: Record<Photo['type'], string> = {
-  before: '施工前',
-  inspection: '現調',
-  undercoat: '下塗り',
-  completed: '完成',
 };
 
 const MEETING_TYPES = ['初回商談', '現地調査', '見積提出', '契約', '工事確認', '完工確認', 'その他'];
@@ -172,8 +166,42 @@ export default function ProjectDetailPage() {
   }, []);
 
   // 写真
-  const [selectedPhotoType, setSelectedPhotoType] = useState<Photo['type']>('before');
+  const [photoPhaseOptions, setPhotoPhaseOptions] = useState<string[]>([]);
+  const [selectedPhotoType, setSelectedPhotoType] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchPhotoPhaseOptions().then((opts) => {
+      if (!cancelled) setPhotoPhaseOptions(opts);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const photoPhaseTabs = useMemo(() => {
+    const base = [...photoPhaseOptions];
+    const seen = new Set(base);
+    (photos ?? []).forEach((p) => {
+      const c = canonicalPhotoPhase(p.type);
+      if (c && !seen.has(c)) {
+        seen.add(c);
+        base.push(c);
+      }
+    });
+    return base;
+  }, [photoPhaseOptions, photos]);
+
+  useEffect(() => {
+    if (photoPhaseTabs.length === 0) return;
+    setSelectedPhotoType((prev) => (prev && photoPhaseTabs.includes(prev) ? prev : photoPhaseTabs[0]));
+  }, [photoPhaseTabs]);
+
+  const filteredPhotos = useMemo(
+    () => photos?.filter((p) => photoMatchesPhase(p.type, selectedPhotoType)) ?? [],
+    [photos, selectedPhotoType]
+  );
 
   // 商談モーダル
   const [meetingModal, setMeetingModal] = useState(false);
@@ -283,6 +311,11 @@ export default function ProjectDetailPage() {
   const handlePhotoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user?.id) return;
+    if (!selectedPhotoType) {
+      showToast('写真フェーズを選択してください', 'error');
+      e.target.value = '';
+      return;
+    }
     setIsUploading(true);
     try {
       const supabase = createClient();
@@ -480,7 +513,6 @@ export default function ProjectDetailPage() {
     contractAmount > 0 ? contractAmount - totalActualDisplayed : null;
   const grossProfit = Number(project.gross_profit ?? 0);
   const grossProfitRate = Number(project.gross_profit_rate ?? 0);
-  const filteredPhotos = photos?.filter((p) => p.type === selectedPhotoType) ?? [];
 
   return (
     <div>
@@ -816,17 +848,17 @@ export default function ProjectDetailPage() {
         <div>
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              {Object.entries(PHOTO_TYPE_LABELS).map(([type, label]) => {
-                const count = photos?.filter((p) => p.type === type).length ?? 0;
+              {photoPhaseTabs.map((phase) => {
+                const count = photos?.filter((p) => photoMatchesPhase(p.type, phase)).length ?? 0;
                 return (
                   <button
-                    key={type}
-                    onClick={() => setSelectedPhotoType(type as Photo['type'])}
+                    key={phase}
+                    onClick={() => setSelectedPhotoType(phase)}
                     className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-                      selectedPhotoType === type ? 'bg-green-600 text-white border-green-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                      selectedPhotoType === phase ? 'bg-green-600 text-white border-green-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
                     }`}
                   >
-                    {label} {count > 0 && <span className="opacity-75">({count})</span>}
+                    {phase} {count > 0 && <span className="opacity-75">({count})</span>}
                   </button>
                 );
               })}
@@ -841,7 +873,7 @@ export default function ProjectDetailPage() {
           {filteredPhotos.length === 0 ? (
             <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
               <span className="material-icons text-gray-200" style={{ fontSize: 48 }}>photo_library</span>
-              <p className="text-gray-400 mt-3">{PHOTO_TYPE_LABELS[selectedPhotoType]}の写真がありません</p>
+              <p className="text-gray-400 mt-3">{selectedPhotoType || '写真'}の写真がありません</p>
             </div>
           ) : (
             <div className="photo-gallery">
@@ -863,7 +895,7 @@ export default function ProjectDetailPage() {
                       loading="lazy"
                     />
                     <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-2 py-1 flex justify-between items-center gap-1">
-                      <span>{PHOTO_TYPE_LABELS[photo.type]}</span>
+                      <span>{canonicalPhotoPhase(photo.type)}</span>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
                         <button
                           title="地図サムネイルに設定"

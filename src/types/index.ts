@@ -76,11 +76,11 @@ export interface Project {
   deleted_at?: string | null;
 }
 
-// Photo
+// Photo（type は m_settings photo_phase_options のラベル文字列）
 export interface Photo {
   id: string;
   project_id: string;
-  type: 'before' | 'inspection' | 'undercoat' | 'completed';
+  type: string;
   file_id: string;
   drive_url: string;
   thumbnail_url: string;
@@ -194,18 +194,18 @@ export interface DashboardKPI {
   gross_profit_amount: number;
 }
 
-/** 業績推移チャート用。月キー YYYY-MM ごとの4指標 */
+/** 業績推移チャート用。月キー YYYY-MM ごとの4指標（いずれも暦月順の積み上げ＝累計） */
 export interface PerformanceTrendPoint {
   month: string;
-  /** 問合せ月×見込み金額（prospect_amount） */
+  /** 問合せ月ごとの見込みを月次累計した積み上げ金額 */
   prospect_amount: number;
-  /** 見積提示月（estimate_date）× 見積金額 */
+  /** 受注予定月（未設定時は見積提示月）に振った見積金額の月次累計 */
   estimate_amount: number;
-  /** 契約月×契約金額 */
+  /** 契約月ごとの契約金額の月次累計（契約・施工中・完成のみ） */
   contract_amount: number;
   /**
-   * その月末時点の粗利累計（契約日が当月末以前かつ契約/施工中/完成の案件の gross_profit 合計。
-   * gross_profit は DB 上 contract_amount - actual_cost でリアルタイム更新）。
+   * 当月末時点の粗利累計（契約日が当月末以前かつ契約/施工中/完成の gross_profit 合計。
+   * gross_profit は DB 上リアルタイム更新）。
    */
   gross_profit_cumulative: number;
 }

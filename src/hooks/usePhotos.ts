@@ -40,7 +40,7 @@ export function useUploadPhoto() {
       progressStatus,
     }: {
       projectId: string;
-      type: Photo['type'];
+      type: string;
       imageBase64: string;
       progressStatus?: Photo['progress_status'];
     }) => {

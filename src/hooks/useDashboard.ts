@@ -49,7 +49,7 @@ export function useDashboard(startDate: string, endDate: string, userId?: string
       let projectsQuery = supabase
         .from('t_projects')
         .select(
-          'id, status, prospect_amount, estimated_amount, contract_amount, gross_profit, gross_profit_rate, acquisition_route, work_type, inquiry_date, estimate_date, contract_date, completion_date, assigned_to'
+          'id, status, prospect_amount, estimated_amount, contract_amount, gross_profit, gross_profit_rate, acquisition_route, work_type, inquiry_date, estimate_date, contract_date, completion_date, expected_order_month, assigned_to'
         )
         .is('deleted_at', null)
         .gte('inquiry_date', startDate)
@@ -79,7 +79,7 @@ export function useDashboard(startDate: string, endDate: string, userId?: string
       const gross_profit_amount = withGrossProfit.reduce((s, p) => s + (p.gross_profit || 0), 0);
       const gross_profit_rate = contract_amount > 0 ? Math.round((gross_profit_amount / contract_amount) * 100 * 10) / 10 : 0;
 
-      // 業績推移: 見込み（問合せ月）／見積（見積提示日の月）／契約（契約月）／粗利累計（契約月末以前の案件の現在粗利合計）
+      // 業績推移: 見込み＝問合せ月・見積＝受注予定月（見積金額）・契約＝契約月をそれぞれ月順で積み上げ。粗利＝当月末までに契約した案件の gross_profit 合計。
       const prospectByMonth: Record<string, number> = {};
       const estimateByMonth: Record<string, number> = {};
       const contractAmtByMonth: Record<string, number> = {};
@@ -94,8 +94,8 @@ export function useDashboard(startDate: string, endDate: string, userId?: string
 
       pj.forEach((p) => {
         const est = Number(p.estimated_amount) || 0;
-        if (est <= 0 || !p.estimate_date) return;
-        const month = String(p.estimate_date).substring(0, 7);
+        if (est <= 0 || !p.expected_order_month) return;
+        const month = String(p.expected_order_month).substring(0, 7);
         estimateByMonth[month] = (estimateByMonth[month] || 0) + est;
       });
 
@@ -116,7 +116,14 @@ export function useDashboard(startDate: string, endDate: string, userId?: string
       const trendMonthKeys =
         rawKeys.length === 0 ? [] : expandMonthRangeInclusive(rawKeys[0], rawKeys[rawKeys.length - 1]);
 
+      let cumProspect = 0;
+      let cumEstimate = 0;
+      let cumContract = 0;
       const performance_trend: PerformanceTrendPoint[] = trendMonthKeys.map((month) => {
+        cumProspect += prospectByMonth[month] || 0;
+        cumEstimate += estimateByMonth[month] || 0;
+        cumContract += contractAmtByMonth[month] || 0;
+
         const gross_profit_cumulative = pj
           .filter(
             (p) =>
@@ -128,9 +135,9 @@ export function useDashboard(startDate: string, endDate: string, userId?: string
 
         return {
           month,
-          prospect_amount: prospectByMonth[month] || 0,
-          estimate_amount: estimateByMonth[month] || 0,
-          contract_amount: contractAmtByMonth[month] || 0,
+          prospect_amount: cumProspect,
+          estimate_amount: cumEstimate,
+          contract_amount: cumContract,
           gross_profit_cumulative,
         };
       });

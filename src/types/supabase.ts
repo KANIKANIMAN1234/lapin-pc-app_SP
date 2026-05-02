@@ -310,7 +310,7 @@ export type Database = {
         Row: {
           id: string;
           project_id: string;
-          type: 'before' | 'inspection' | 'undercoat' | 'completed';
+          type: string;
           file_id: string;
           drive_url: string;
           thumbnail_url: string;
@@ -325,7 +325,7 @@ export type Database = {
         Insert: {
           id?: string;
           project_id: string;
-          type: 'before' | 'inspection' | 'undercoat' | 'completed';
+          type: string;
           file_id: string;
           drive_url: string;
           thumbnail_url: string;
@@ -337,7 +337,7 @@ export type Database = {
           deleted_at?: string | null;
         };
         Update: {
-          type?: 'before' | 'inspection' | 'undercoat' | 'completed';
+          type?: string;
           file_id?: string;
           drive_url?: string;
           thumbnail_url?: string;

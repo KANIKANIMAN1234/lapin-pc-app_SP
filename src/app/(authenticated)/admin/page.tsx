@@ -30,6 +30,7 @@ const MASTER_DEFS = [
   { key: 'project_status_options',  label: '案件ステータス', icon: 'flag',        desc: '案件のステータス一覧（値:ラベル の形式で入力）' },
   { key: 'expense_category_options', label: '経費カテゴリ', icon: 'receipt_long', desc: '経費登録で使用するカテゴリ' },
   { key: 'meeting_type_options',    label: '商談種別',     icon: 'handshake',     desc: '商談記録で使用する種別' },
+  { key: 'photo_phase_options',     label: '写真撮影フェーズ', icon: 'photo_camera', desc: '案件詳細の写真タブ・スマホ現場写真で選択するフェーズ' },
   { key: 'drive_folder_template',   label: 'Drive 新規フォルダ構成', icon: 'folder', desc: '新規案件作成時に作るサブフォルダ。階層は / で区切る（例: 03_施工写真/着工前）。連携実装が参照します。' },
 ];
 
@@ -461,7 +462,7 @@ export default function AdminPage() {
       {/* ── マスター管理 ── */}
       {activeTab === 'masters' && (
         <div>
-          <p className="text-sm text-gray-500 mb-6">各マスターの選択肢を管理できます。変更は案件登録・経費登録のドロップダウンに即時反映されます。</p>
+          <p className="text-sm text-gray-500 mb-6">各マスターの選択肢を管理できます。変更は案件登録・経費登録・写真フェーズなどのドロップダウンに即時反映されます（写真はページ再表示で反映）。</p>
           {mastersLoading ? (
             <div className="flex items-center justify-center py-12"><div className="spinner" /><p className="ml-3 text-gray-500">読み込み中...</p></div>
           ) : (
