@@ -52,6 +52,12 @@ function fmt(v: number | null | undefined) {
   if (v == null) return '-';
   return v >= 10000 ? `${Math.floor(v / 10000).toLocaleString()}万円` : `${v.toLocaleString()}円`;
 }
+/** 基本情報・金額情報用: 円を万円単位で小数第1位、「万」のみ */
+function fmtMan(v: number | null | undefined) {
+  if (v == null) return '-';
+  const man = Number(v) / 10000;
+  return `${man.toFixed(1)}万`;
+}
 function fmtDate(d: string | null | undefined) {
   return d ? String(d).substring(0, 10) : '-';
 }
@@ -664,25 +670,25 @@ export default function ProjectDetailPage() {
               <InfoRow label="見積もり金額">
                 {editingBasic
                   ? <input type="number" className="form-input w-full" value={editForm.estimated_amount ?? 0} onChange={(e) => setEditForm({ ...editForm, estimated_amount: Number(e.target.value) })} />
-                  : fmt(project.estimated_amount)}
+                  : fmtMan(project.estimated_amount)}
               </InfoRow>
               <InfoRow label="契約金額">
                 {editingBasic
                   ? <input type="number" className="form-input w-full" value={editForm.contract_amount ?? 0} onChange={(e) => setEditForm({ ...editForm, contract_amount: Number(e.target.value) })} />
-                  : fmt(project.contract_amount)}
+                  : fmtMan(project.contract_amount)}
               </InfoRow>
               <InfoRow label="実行原価">
-                <span className="font-medium">{fmt(totalActualDisplayed)}</span>
+                <span className="font-medium">{fmtMan(totalActualDisplayed)}</span>
                 <span className="text-xs text-gray-400 ml-1">（予算実績＋登録経費）</span>
               </InfoRow>
               <InfoRow label="粗利益">
                 <span className={`font-medium ${grossProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {fmt(grossProfit)}
+                  {fmtMan(grossProfit)}
                 </span>
               </InfoRow>
               <InfoRow label="粗利率">
                 <span className={`font-medium ${grossProfitRate >= 20 ? 'text-green-600' : 'text-red-600'}`}>
-                  {grossProfitRate != null ? `${grossProfitRate}%` : '-'}
+                  {grossProfitRate != null && !Number.isNaN(grossProfitRate) ? `${Number(grossProfitRate).toFixed(1)}%` : '-'}
                 </span>
               </InfoRow>
             </div>
