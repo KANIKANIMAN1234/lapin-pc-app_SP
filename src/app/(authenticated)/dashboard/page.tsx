@@ -202,12 +202,14 @@ function ManagementTab() {
   const kpiItems = [
     { title: '担当案件数', value: String(kpi.assigned_projects_count), unit: '件' },
     { title: '見込み金額', value: formatYen(kpi.assigned_projects_amount), unit: '' },
-    { title: '見積もり数', value: String(kpi.sent_estimates_count), unit: '件' },
-    { title: '送客金額', value: formatYen(kpi.sent_estimates_amount), unit: '' },
-    { title: '契約数', value: String(kpi.contract_count), unit: '件' },
+    { title: '見積もり件数', value: String(kpi.sent_estimates_count), unit: '件' },
+    { title: '提示見積', value: formatYen(kpi.sent_estimates_amount), unit: '' },
+    { title: '契約件数', value: String(kpi.contract_count), unit: '件' },
+    { title: '契約金額', value: formatYen(kpi.contract_amount), unit: '' },
     { title: '契約平均単価', value: kpi.average_contract_amount > 0 ? formatYen(kpi.average_contract_amount) : '-', unit: '' },
     { title: '契約率', value: String(kpi.contract_rate), unit: '%' },
     { title: '粗利率', value: String(kpi.gross_profit_rate), unit: '%' },
+    { title: '粗利益金額', value: formatYen(kpi.gross_profit_amount), unit: '' },
   ];
 
   const performanceLineChartConfig = {
