@@ -57,6 +57,12 @@ function fmtMan(v: number | null | undefined) {
 function fmtDate(d: string | null | undefined) {
   return d ? String(d).substring(0, 10) : '-';
 }
+/** t_reports.photo_urls（JSON 配列）を URL 文字列リストに正規化 */
+function parseReportPhotoUrls(photo_urls: unknown): string[] {
+  if (photo_urls == null) return [];
+  if (!Array.isArray(photo_urls)) return [];
+  return photo_urls.filter((u): u is string => typeof u === 'string' && u.length > 0);
+}
 /** 月初日保存の DATE を YYYY年MM月 で表示 */
 function fmtYearMonth(d: string | null | undefined) {
   if (!d) return '-';
@@ -482,7 +488,7 @@ export default function ProjectDetailPage() {
       const supabase = createClient();
       const { data, error } = await supabase
         .from('t_reports')
-        .select(`id, report_date, title, content, achievements, issues, next_actions, submitted_at, m_users!user_id(name)`)
+        .select(`id, report_date, title, content, photo_urls, achievements, issues, next_actions, submitted_at, m_users!user_id(name)`)
         .eq('project_id', projectId)
         .is('deleted_at', null)
         .order('report_date', { ascending: false })
@@ -928,20 +934,6 @@ export default function ProjectDetailPage() {
             </div>
           )}
 
-          {lightboxUrl && (
-            <div className="modal-overlay" onClick={() => setLightboxUrl(null)}>
-              <div className="relative max-w-4xl w-full mx-4" onClick={(e) => e.stopPropagation()}>
-                <img src={lightboxUrl} alt="写真" className="w-full h-auto rounded-xl" />
-                <button onClick={() => setLightboxUrl(null)} className="absolute top-2 right-2 bg-black/50 text-white rounded-full p-1">
-                  <span className="material-icons">close</span>
-                </button>
-                <a href={lightboxUrl} target="_blank" rel="noopener noreferrer"
-                  className="absolute bottom-2 right-2 bg-black/50 text-white text-xs rounded px-2 py-1">
-                  Drive で開く
-                </a>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -1133,6 +1125,7 @@ export default function ProjectDetailPage() {
             <div className="divide-y divide-gray-100">
               {reports.map((r) => {
                 const reportedBy = (r as unknown as { m_users?: { name: string } }).m_users?.name;
+                const reportPhotos = parseReportPhotoUrls((r as { photo_urls?: unknown }).photo_urls);
                 return (
                   <div key={r.id} className="p-4 hover:bg-gray-50 cursor-pointer flex items-start gap-4" onClick={() => setReportDetail(r)}>
                     <div className="shrink-0 w-16 h-16 bg-green-50 rounded-lg flex flex-col items-center justify-center">
@@ -1140,8 +1133,14 @@ export default function ProjectDetailPage() {
                       <span className="text-lg font-bold text-green-700">{fmtDate(r.report_date).substring(8, 10)}</span>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <h4 className="text-sm font-semibold truncate">{r.title || `${fmtDate(r.report_date)} 日報`}</h4>
+                        {reportPhotos.length > 0 && (
+                          <span className="shrink-0 text-xs px-2 py-0.5 bg-amber-50 text-amber-800 rounded-full flex items-center gap-0.5">
+                            <span className="material-icons" style={{ fontSize: 14 }}>image</span>
+                            {reportPhotos.length}
+                          </span>
+                        )}
                         {reportedBy && <span className="shrink-0 text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full">{reportedBy}</span>}
                       </div>
                       <p className="text-xs text-gray-500 line-clamp-2">{r.content}</p>
@@ -1254,6 +1253,26 @@ export default function ProjectDetailPage() {
         </div>
       )}
 
+      {lightboxUrl && (
+        <div className="modal-overlay" onClick={() => setLightboxUrl(null)}>
+          <div className="relative max-w-4xl w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={lightboxUrl} alt="写真" className="w-full h-auto rounded-xl" />
+            <button type="button" onClick={() => setLightboxUrl(null)} className="absolute top-2 right-2 bg-black/50 text-white rounded-full p-1">
+              <span className="material-icons">close</span>
+            </button>
+            <a
+              href={lightboxUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="absolute bottom-2 right-2 bg-black/50 text-white text-xs rounded px-2 py-1"
+            >
+              新しいタブで開く
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* ══════════ 日報詳細モーダル ══════════ */}
       {reportDetail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setReportDetail(null)}>
@@ -1272,6 +1291,28 @@ export default function ProjectDetailPage() {
                 <h4 className="text-xs font-bold text-gray-500 mb-2">報告内容</h4>
                 <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{reportDetail.content || '（内容なし）'}</p>
               </div>
+              {(() => {
+                const rPhotos = parseReportPhotoUrls((reportDetail as { photo_urls?: unknown }).photo_urls);
+                if (rPhotos.length === 0) return null;
+                return (
+                  <div className="mb-4">
+                    <h4 className="text-xs font-bold text-gray-500 mb-2">添付写真</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {rPhotos.map((url, i) => (
+                        <button
+                          key={`${url}-${i}`}
+                          type="button"
+                          className="rounded-lg overflow-hidden border border-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500 shrink-0"
+                          onClick={() => setLightboxUrl(url)}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={url} alt="" className="w-28 h-28 object-cover bg-gray-100" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               {Array.isArray(reportDetail.achievements) && reportDetail.achievements.length > 0 && (
                 <div className="mb-3">
                   <h4 className="text-xs font-bold text-gray-500 mb-1">成果</h4>

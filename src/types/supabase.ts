@@ -497,6 +497,7 @@ export type Database = {
           title: string | null;
           content: string;
           audio_url: string | null;
+          photo_urls: Json | null;
           visits: Json | null;
           activities: Json | null;
           achievements: Json | null;
@@ -515,6 +516,7 @@ export type Database = {
           title?: string | null;
           content: string;
           audio_url?: string | null;
+          photo_urls?: Json | null;
           visits?: Json | null;
           activities?: Json | null;
           achievements?: Json | null;
@@ -528,6 +530,7 @@ export type Database = {
           title?: string | null;
           content?: string;
           audio_url?: string | null;
+          photo_urls?: Json | null;
           visits?: Json | null;
           activities?: Json | null;
           achievements?: Json | null;
