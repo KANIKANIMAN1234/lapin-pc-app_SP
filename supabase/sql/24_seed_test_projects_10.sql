@@ -1,16 +1,69 @@
 -- =============================================================================
--- テスト案件 10 件の投入（開発・検証用）
+-- テスト顧客 10 件 + テスト案件 10 件の投入（開発・検証用）
 -- =============================================================================
 -- ■ Supabase SQL Editor で実行してください。
--- ■ 前提: m_users に status = 'active' のユーザーが少なくとも 1 人いること。
---   （いない場合は先にログイン運用でユーザーを作成するか、06_seed_users を参照）
--- ■ project_number は NULL のまま INSERT し、既存トリガーで YYYY-NNNN を採番します。
--- ■ 重複投入する場合は、先に 23_wipe_all_projects.sql などで案件を空にするか、
---   本スクリプトをそのまま二度実行すると管理番号だけ連番で増えます（顧客名は同じでも可）。
--- ■ 住所はテスト用ダミー（埼玉県：所沢市・入間市・日高市・飯能市周辺）。
+-- ■ 前提: m_users に status = 'active' が 1 人以上いること。
+-- ■ 顧客は m_customers に先行投入し、t_projects.customer_id で紐づけます（案件側の顧客名・住所等は顧客と同一内容）。
+-- ■ notes に「24_seed_test_projects_10」を含む案件・顧客を、実行時に一度削除してから再挿入するため、**同じスクリプトを繰り返し実行しても重複しにくい**です。
+-- ■ 顧客 id は固定 UUID（11111111-…-…-a111-…01〜0a）です。手動で参照・削除しやすくするためのテスト用です。
+-- ■ project_number / customer_number は NULL のまま INSERT し、トリガーで採番します。
+-- ■ 住所ダミー: 埼玉県 所沢・入間・日高・飯能。
 -- =============================================================================
 
+BEGIN;
+
+-- いったん同シードだけ掃除（案件→顧客の順。customer_id RESTRICT のため先に案件）
+DELETE FROM t_projects
+WHERE notes LIKE '%24_seed_test_projects_10%';
+
+DELETE FROM m_customers
+WHERE notes LIKE '%24_seed_test_projects_10%';
+
+-- ── 顧客マスタ 10 件（固定 id）────────────────────────────────
+INSERT INTO m_customers (
+  id,
+  customer_name,
+  customer_name_kana,
+  postal_code,
+  address,
+  phone,
+  email,
+  notes,
+  created_by
+)
+SELECT
+  x.customer_id,
+  x.customer_name,
+  x.customer_name_kana,
+  x.postal_code,
+  x.address,
+  x.phone,
+  x.email,
+  '24_seed_test_projects_10 顧客マスタ',
+  u.id
+FROM (VALUES
+  ('11111111-1111-4111-a111-111111110001'::uuid, '佐藤 花子', 'サトウハナコ', '359-0037', '埼玉県所沢市くすのき台1-1-1', '042-9990-0101', 'satou.test01@example.com'::text),
+  ('11111111-1111-4111-a111-111111110002'::uuid, '鈴木 太郎', 'スズキタロウ', '350-1123', '埼玉県所沢市北所沢町2-2-2', '042-9990-0102', NULL::text),
+  ('11111111-1111-4111-a111-111111110003'::uuid, '高橋 次郎', 'タカハシジロウ', '358-0002', '埼玉県入間市東藤沢3-3-3', '042-9990-0103', 'takahashi.test@example.com'),
+  ('11111111-1111-4111-a111-111111110004'::uuid, '伊藤 みさき', 'イトウミサキ', '358-0014', '埼玉県入間市上小谷田4-4-4', '042-9990-0104', NULL),
+  ('11111111-1111-4111-a111-111111110005'::uuid, '渡辺 誠', 'ワタナベマコト', '350-1241', '埼玉県日高市高麗川5-5-5', '042-9990-0105', 'watanabe.test@example.com'),
+  ('11111111-1111-4111-a111-111111110006'::uuid, '中村 凛', 'ナカムラリン', '350-1231', '埼玉県日高市高萩東6-6-6', '042-9990-0106', NULL),
+  ('11111111-1111-4111-a111-111111110007'::uuid, '小林 光', 'コバヤシヒカル', '357-0034', '埼玉県飯能市柳町7-7-7', '042-9990-0107', 'kobayashi.test@example.com'),
+  ('11111111-1111-4111-a111-111111110008'::uuid, '加藤 奈々', 'カトウナナ', '357-0067', '埼玉県飯能市仲町8-8-8', '042-9990-0108', NULL),
+  ('11111111-1111-4111-a111-111111110009'::uuid, '吉田 修', 'ヨシダオサム', '359-1144', '埼玉県所沢市大字上山口9-9-9', '042-9990-0109', 'yoshida.test@example.com'),
+  ('11111111-1111-4111-a111-11111111000a'::uuid, '山本 恵', 'ヤマモトメグミ', '358-0003', '埼玉県入間市豊岡10-10-10', '042-9990-0110', NULL)
+) AS x (customer_id, customer_name, customer_name_kana, postal_code, address, phone, email)
+CROSS JOIN LATERAL (
+  SELECT id
+  FROM m_users
+  WHERE status = 'active'
+  ORDER BY CASE role WHEN 'admin' THEN 0 WHEN 'staff' THEN 1 ELSE 2 END, name
+  LIMIT 1
+) AS u(id);
+
+-- ── 案件 10 件（customer_id 紐付け）───────────────────────────
 INSERT INTO t_projects (
+  customer_id,
   project_title,
   customer_name,
   customer_name_kana,
@@ -35,9 +88,11 @@ INSERT INTO t_projects (
   thankyou_flag,
   followup_flag,
   inspection_flag,
-  notes
+  notes,
+  created_by
 )
 SELECT
+  v.customer_id,
   v.project_title,
   v.customer_name,
   v.customer_name_kana,
@@ -62,10 +117,12 @@ SELECT
   v.thankyou_flag,
   v.followup_flag,
   v.inspection_flag,
-  v.notes
+  v.notes,
+  u.id
 FROM (VALUES
-  -- 1–2: 問い合わせ（見込みのみ・見積未登録想定）
+  -- 1–2: 問い合わせ
   (
+    '11111111-1111-4111-a111-111111110001'::uuid,
     '【テスト】佐藤様邸 キッチン',
     '佐藤 花子',
     'サトウハナコ',
@@ -92,6 +149,7 @@ FROM (VALUES
     '24_seed_test_projects_10 テストデータ'
   ),
   (
+    '11111111-1111-4111-a111-111111110002'::uuid,
     '【テスト】鈴木様邸 バス',
     '鈴木 太郎',
     'スズキタロウ',
@@ -119,6 +177,7 @@ FROM (VALUES
   ),
   -- 3–4: 見積・追客
   (
+    '11111111-1111-4111-a111-111111110003'::uuid,
     '【テスト】高橋様邸 外壁',
     '高橋 次郎',
     'タカハシジロウ',
@@ -145,6 +204,7 @@ FROM (VALUES
     '24_seed_test_projects_10 テストデータ'
   ),
   (
+    '11111111-1111-4111-a111-111111110004'::uuid,
     '【テスト】伊藤様邸 屋根',
     '伊藤 みさき',
     'イトウミサキ',
@@ -172,6 +232,7 @@ FROM (VALUES
   ),
   -- 5–6: 契約
   (
+    '11111111-1111-4111-a111-111111110005'::uuid,
     '【テスト】渡辺様邸 内装',
     '渡辺 誠',
     'ワタナベマコト',
@@ -198,6 +259,7 @@ FROM (VALUES
     '24_seed_test_projects_10 テストデータ'
   ),
   (
+    '11111111-1111-4111-a111-111111110006'::uuid,
     '【テスト】中村様邸 外構',
     '中村 凛',
     'ナカムラリン',
@@ -225,6 +287,7 @@ FROM (VALUES
   ),
   -- 7–8: 施工中
   (
+    '11111111-1111-4111-a111-111111110007'::uuid,
     '【テスト】小林様邸 塗装',
     '小林 光',
     'コバヤシヒカル',
@@ -251,6 +314,7 @@ FROM (VALUES
     '24_seed_test_projects_10 テストデータ'
   ),
   (
+    '11111111-1111-4111-a111-111111110008'::uuid,
     '【テスト】加藤様邸 水回り',
     '加藤 奈々',
     'カトウナナ',
@@ -278,6 +342,7 @@ FROM (VALUES
   ),
   -- 9: 完成
   (
+    '11111111-1111-4111-a111-111111110009'::uuid,
     '【テスト】吉田様邸 防水',
     '吉田 修',
     'ヨシダオサム',
@@ -305,6 +370,7 @@ FROM (VALUES
   ),
   -- 10: 失注
   (
+    '11111111-1111-4111-a111-11111111000a'::uuid,
     '【テスト】山本様邸（失注）',
     '山本 恵',
     'ヤマモトメグミ',
@@ -331,6 +397,7 @@ FROM (VALUES
     '24_seed_test_projects_10 テストデータ（失注サンプル）'
   )
 ) AS v (
+  customer_id,
   project_title,
   customer_name,
   customer_name_kana,
@@ -363,3 +430,5 @@ CROSS JOIN LATERAL (
   ORDER BY CASE role WHEN 'admin' THEN 0 WHEN 'staff' THEN 1 ELSE 2 END, name
   LIMIT 1
 ) AS u(id);
+
+COMMIT;

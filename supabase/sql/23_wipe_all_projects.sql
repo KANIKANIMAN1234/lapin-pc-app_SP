@@ -11,7 +11,8 @@
 -- 残すもの:
 --   - t_expenses: 案件紐付けのみ解除（project_id → NULL）。経費行自体は残ります。
 --   - t_receipts: 同上（project_id → NULL）
---   - m_customers（顧客マスタ）, m_users, t_reports, t_bonus, t_attendance など
+--   - m_customers のうち、24_seed_test_projects_10 以外の顧客レコード
+--   - m_users, t_reports, t_bonus, t_attendance など
 --
 -- 新規案件の project_number は、トリガーが「当年の最大番号+1」で採番するため、
 -- 全削除後は 当年の 0001 から再開されます。
@@ -30,6 +31,10 @@ WHERE project_id IS NOT NULL;
 
 -- 案件本体（子の photos / budgets / meetings は CASCADE で削除）
 DELETE FROM t_projects;
+
+-- 24_seed_test_projects_10 で投入したテスト顧客のみ削除（notes で判定）
+DELETE FROM m_customers
+WHERE notes LIKE '%24_seed_test_projects_10%';
 
 COMMIT;
 
