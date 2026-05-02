@@ -28,6 +28,8 @@ export interface Project {
   /** 顧客マスタ（m_customers）への参照。未移行データは null の可能性あり */
   customer_id?: string | null;
   customer_name: string;
+  /** 案件名（表示・Drive フォルダ名の優先ラベル） */
+  project_title?: string | null;
   customer_name_kana?: string;
   postal_code?: string;
   address: string;
@@ -60,7 +62,6 @@ export interface Project {
   drive_folder_id?: string;
   drive_folder_url?: string;
   notes?: string;
-  created_by?: string | null;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;

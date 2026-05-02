@@ -41,14 +41,10 @@ const MEETING_TYPES = ['初回商談', '現地調査', '見積提出', '契約',
 
 const BUDGET_CATEGORIES = ['材料費', '労務費', '外注費', '経費', 'その他'] as const;
 
-const CUSTOMER_HISTORY_STATUS_LABEL: Record<string, string> = {
-  inquiry: '問い合わせ',
-  estimate: '見積',
-  followup_status: 'フォロー中',
-  contract: '契約',
-  in_progress: '施工中',
-  completed: '完工',
-  lost: '失注',
+const EXPENSE_STATUS_LABEL: Record<string, string> = {
+  pending: '未処理',
+  approved: '取込済',
+  rejected: '却下',
 };
 
 // ─── ヘルパー ────────────────────────────────────────────────────
@@ -101,48 +97,6 @@ export default function ProjectDetailPage() {
   const projectId = params.id as string;
 
   const { data: project, isLoading } = useProject(projectId);
-  const customerId =
-    project && typeof project === 'object' && 'customer_id' in project
-      ? (project as { customer_id?: string | null }).customer_id
-      : null;
-
-  const { data: customerMaster } = useQuery({
-    queryKey: ['m_customer', customerId],
-    queryFn: async () => {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('m_customers')
-        .select('customer_number, customer_name')
-        .eq('id', customerId!)
-        .maybeSingle();
-      if (error) throw error;
-      return data as { customer_number: string | null; customer_name: string } | null;
-    },
-    enabled: !!customerId,
-  });
-
-  const { data: siblingProjects } = useQuery({
-    queryKey: ['customer-projects', customerId],
-    queryFn: async () => {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('t_projects')
-        .select('id, project_number, status, inquiry_date, work_description')
-        .eq('customer_id', customerId!)
-        .is('deleted_at', null)
-        .order('inquiry_date', { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as {
-        id: string;
-        project_number: string | null;
-        status: string;
-        inquiry_date: string;
-        work_description: string;
-      }[];
-    },
-    enabled: !!customerId,
-  });
-
   const { data: photos } = usePhotos(projectId);
   const { mutateAsync: updateProject, isPending: isUpdating } = useUpdateProject();
   const { mutateAsync: deletePhoto } = useDeletePhoto();
@@ -382,6 +336,32 @@ export default function ProjectDetailPage() {
     enabled: activeTab === 'budget',
   });
 
+  const { data: projectExpenses = [] } = useQuery({
+    queryKey: ['project-expenses', projectId],
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('t_expenses')
+        .select(
+          'id, expense_date, category, amount, memo, status, m_users!t_expenses_user_id_fkey(name)'
+        )
+        .eq('project_id', projectId)
+        .is('deleted_at', null)
+        .order('expense_date', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as {
+        id: string;
+        expense_date: string;
+        category: string;
+        amount: number;
+        memo: string | null;
+        status: string;
+        m_users: { name: string } | null;
+      }[];
+    },
+    enabled: activeTab === 'budget',
+  });
+
   const createBudget = useMutation({
     mutationFn: async () => {
       const supabase = createClient();
@@ -397,6 +377,7 @@ export default function ProjectDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['budgets', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       setBudgetModal(false);
       setBudgetForm({ item: '', item_category: '材料費', planned_vendor: '', planned_amount: '', actual_amount: '' });
       showToast('原価明細を追加しました');
@@ -405,7 +386,7 @@ export default function ProjectDetailPage() {
   });
 
   const totalPlanned = budgets.reduce((s, b) => s + Number(b.planned_amount ?? 0), 0);
-  const totalActual = budgets.reduce((s, b) => s + Number(b.actual_amount ?? 0), 0);
+  const totalActualBudgets = budgets.reduce((s, b) => s + Number(b.actual_amount ?? 0), 0);
 
   // ── 日報 ──
   const { data: reports = [] } = useQuery({
@@ -441,6 +422,9 @@ export default function ProjectDetailPage() {
   }
 
   const contractAmount = Number(project.contract_amount ?? 0);
+  const totalActualProject = Number(project.actual_cost ?? 0);
+  const grossFromActual =
+    contractAmount > 0 ? contractAmount - totalActualProject : null;
   const grossProfit = Number(project.gross_profit ?? 0);
   const grossProfitRate = Number(project.gross_profit_rate ?? 0);
   const filteredPhotos = photos?.filter((p) => p.type === selectedPhotoType) ?? [];
@@ -538,14 +522,7 @@ export default function ProjectDetailPage() {
               <h3 style={{ marginBottom: '0.75rem' }}>
                 <span className="material-icons text-green-600" style={{ fontSize: 16 }}>person</span> 顧客情報
               </h3>
-              <InfoRow label="案件管理番号">{project.project_number}</InfoRow>
-              <InfoRow label="顧客管理番号">
-                {!customerId
-                  ? <span className="text-gray-400 text-sm">—（マスタ未紐づけ）</span>
-                  : customerMaster?.customer_number
-                    ? <span className="font-mono font-medium text-blue-700">{customerMaster.customer_number}</span>
-                    : <span className="text-gray-400 text-sm">読み込み中…</span>}
-              </InfoRow>
+              <InfoRow label="管理番号">{project.project_number}</InfoRow>
               <InfoRow label="顧客名">
                 {editingBasic
                   ? <input className="form-input w-full" value={String(editForm.customer_name ?? '')} onChange={(e) => setEditForm({ ...editForm, customer_name: e.target.value })} />
@@ -701,49 +678,6 @@ export default function ProjectDetailPage() {
             </div>
 
           </div>
-
-          {customerId && siblingProjects && siblingProjects.length > 0 && (
-            <div className="detail-section mt-4" style={{ padding: '1rem' }}>
-              <h3 className="mb-3 flex items-center gap-2">
-                <span className="material-icons text-gray-600" style={{ fontSize: 18 }}>history</span>
-                同一顧客の工事履歴
-              </h3>
-              <p className="text-xs text-gray-500 mb-2">顧客管理番号で紐づく全案件の一覧です。行をクリックで開きます。</p>
-              <div className="overflow-x-auto border border-gray-200 rounded-lg">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-left text-xs text-gray-600">
-                    <tr>
-                      <th className="px-3 py-2 font-medium">案件番号</th>
-                      <th className="px-3 py-2 font-medium">ステータス</th>
-                      <th className="px-3 py-2 font-medium">問い合わせ日</th>
-                      <th className="px-3 py-2 font-medium">工事内容</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {siblingProjects.map((row) => (
-                      <tr
-                        key={row.id}
-                        className={`hover:bg-green-50/50 cursor-pointer ${row.id === projectId ? 'bg-green-50' : ''}`}
-                        onClick={() => row.id !== projectId && router.push(`/projects/${row.id}`)}
-                      >
-                        <td className="px-3 py-2 font-mono">{row.project_number ?? '—'}</td>
-                        <td className="px-3 py-2">
-                          {CUSTOMER_HISTORY_STATUS_LABEL[row.status] ?? row.status}
-                          {row.id === projectId && (
-                            <span className="ml-2 text-[10px] text-green-700 font-bold">現表示中</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2">{fmtDate(row.inquiry_date)}</td>
-                        <td className="px-3 py-2 text-gray-600 max-w-xs truncate" title={row.work_description}>
-                          {row.work_description || '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -856,28 +790,28 @@ export default function ProjectDetailPage() {
             <SummaryCard label="計画原価合計" value={fmt(totalPlanned)} />
             <SummaryCard
               label="実際原価合計"
-              value={fmt(totalActual)}
-              color={totalActual > contractAmount && contractAmount > 0 ? 'red' : undefined}
+              value={fmt(totalActualProject)}
+              color={totalActualProject > contractAmount && contractAmount > 0 ? 'red' : undefined}
             />
             <SummaryCard
               label="粗利（見込）"
-              value={contractAmount > 0 ? fmt(contractAmount - (totalActual || totalPlanned)) : '-'}
-              color={(contractAmount - (totalActual || totalPlanned)) >= 0 ? 'green' : 'red'}
+              value={grossFromActual != null ? fmt(grossFromActual) : '-'}
+              color={grossFromActual != null ? (grossFromActual >= 0 ? 'green' : 'red') : undefined}
             />
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200">
             <div className="flex items-center justify-between p-4 border-b border-gray-100">
-              <h3 className="font-bold text-sm">原価明細</h3>
+              <h3 className="font-bold text-sm">原価明細（予算・実行）</h3>
               <button onClick={() => setBudgetModal(true)} className="btn-primary text-xs py-1.5 px-3">
                 <span className="material-icons text-sm">add</span>明細を追加
               </button>
             </div>
 
             {budgets.length === 0 ? (
-              <div className="text-center py-12">
+              <div className="text-center py-8 px-4">
                 <span className="material-icons text-5xl mb-3 block" style={{ color: '#d1d5db' }}>receipt_long</span>
-                <p className="text-gray-500 text-sm">原価明細はまだ登録されていません</p>
+                <p className="text-gray-500 text-sm">予算ベースの明細はまだありません</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -908,15 +842,61 @@ export default function ProjectDetailPage() {
                       );
                     })}
                     <tr className="border-t-2 border-gray-200 bg-gray-50 font-bold">
-                      <td colSpan={3} className="px-4 py-3 text-right text-sm">合計</td>
+                      <td colSpan={3} className="px-4 py-3 text-right text-sm">合計（予算表のみ）</td>
                       <td className="px-4 py-3">{fmt(totalPlanned)}</td>
-                      <td className="px-4 py-3">{totalActual > 0 ? fmt(totalActual) : '—'}</td>
+                      <td className="px-4 py-3">{totalActualBudgets > 0 ? fmt(totalActualBudgets) : '—'}</td>
                       <td className="px-4 py-3" />
                     </tr>
                   </tbody>
                 </table>
               </div>
             )}
+
+            <div className="border-t border-gray-100 p-4">
+              <h4 className="font-bold text-sm mb-3 flex items-center gap-1.5">
+                <span className="material-icons text-gray-500" style={{ fontSize: 18 }}>payments</span>
+                登録経費
+              </h4>
+              <p className="text-xs text-gray-500 mb-3">
+                PC・スマホの経費登録でこの案件を選択したものが表示されます（未処理・取込済が原価合計に含まれます）。
+              </p>
+              {projectExpenses.length === 0 ? (
+                <p className="text-center text-gray-400 text-sm py-6">案件に紐づく経費はまだありません</p>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border border-gray-100">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        {['日付', 'カテゴリ', '金額', 'ステータス', '登録者', 'メモ'].map((h) => (
+                          <th key={h} className="px-3 py-2 text-left font-medium text-gray-600 whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {projectExpenses.map((ex) => {
+                        const muted = ex.status === 'rejected';
+                        return (
+                          <tr key={ex.id} className={`border-t border-gray-100 ${muted ? 'opacity-60' : ''}`}>
+                            <td className="px-3 py-2.5 whitespace-nowrap">{fmtDate(ex.expense_date)}</td>
+                            <td className="px-3 py-2.5">
+                              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 text-xs rounded">{ex.category}</span>
+                            </td>
+                            <td className="px-3 py-2.5 font-medium">{fmt(Number(ex.amount))}</td>
+                            <td className="px-3 py-2.5">
+                              <span className="text-xs text-gray-600">{EXPENSE_STATUS_LABEL[ex.status] ?? ex.status}</span>
+                            </td>
+                            <td className="px-3 py-2.5 text-gray-600 text-xs">{ex.m_users?.name ?? '—'}</td>
+                            <td className="px-3 py-2.5 text-gray-500 max-w-[200px] truncate" title={ex.memo ?? ''}>
+                              {ex.memo || '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

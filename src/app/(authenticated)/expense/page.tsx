@@ -113,6 +113,7 @@ export default function ExpensePage() {
   const { mutateAsync: createExpense, isPending } = useMutation({
     mutationFn: async () => {
       const supabase = createClient();
+      const linkedProjectId = form.project_id || null;
       let receiptUrl: string | null = null;
 
       // レシートをStorageにアップロード
@@ -132,7 +133,7 @@ export default function ExpensePage() {
 
       const { error } = await supabase.from('t_expenses').insert({
         user_id: user?.id ?? '',
-        project_id: form.project_id || null,
+        project_id: linkedProjectId,
         expense_date: form.date,
         category: form.category,
         memo: form.memo || null,
@@ -141,9 +142,14 @@ export default function ExpensePage() {
         status: 'pending',
       });
       if (error) throw error;
+      return linkedProjectId;
     },
-    onSuccess: () => {
+    onSuccess: (linkedProjectId) => {
       queryClient.invalidateQueries({ queryKey: ['expenses', user?.id] });
+      if (linkedProjectId) {
+        queryClient.invalidateQueries({ queryKey: ['project', linkedProjectId] });
+        queryClient.invalidateQueries({ queryKey: ['project-expenses', linkedProjectId] });
+      }
       setForm({
         project_id: '',
         amount: '',
@@ -165,7 +171,7 @@ export default function ExpensePage() {
   };
 
   // 会計取込トグル
-  const handleToggleAccounting = async (expId: string, currentStatus: string) => {
+  const handleToggleAccounting = async (expId: string, currentStatus: string, projectId: string | null) => {
     setTogglingId(expId);
     const newStatus = currentStatus === 'approved' ? 'pending' : 'approved';
     const supabase = createClient();
@@ -177,6 +183,10 @@ export default function ExpensePage() {
       showToast('更新に失敗しました', 'error');
     } else {
       queryClient.invalidateQueries({ queryKey: ['expenses', user?.id] });
+      if (projectId) {
+        queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+        queryClient.invalidateQueries({ queryKey: ['project-expenses', projectId] });
+      }
     }
     setTogglingId(null);
   };
@@ -393,7 +403,7 @@ export default function ExpensePage() {
                         <input
                           type="checkbox"
                           checked={isImported}
-                          onChange={() => handleToggleAccounting(item.id, item.status)}
+                          onChange={() => handleToggleAccounting(item.id, item.status, item.project_id ?? null)}
                           disabled={isToggling}
                           className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer"
                         />
